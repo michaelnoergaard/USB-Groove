@@ -17,6 +17,11 @@ cask "usb-groove" do
 
   app "USBGroove.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-cr", "#{appdir}/USBGroove.app"]
+  end
+
   zap trash: [
     "~/Library/Logs/USBGroove.log",
   ]

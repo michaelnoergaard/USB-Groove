@@ -25,7 +25,13 @@ Download the latest release from [GitHub Releases](https://github.com/michaelnoe
 | Platform | File | How to run |
 |----------|------|------------|
 | **Windows** | `USBGroove.exe` | Just download and run |
-| **macOS** | `USBGroove-macOS.zip` | Unzip, move `USBGroove.app` to Applications |
+| **macOS** | `USBGroove-macOS.zip` | Unzip, move `USBGroove.app` to Applications, see note below |
+
+> **macOS Gatekeeper note:** Since the app is not code-signed, macOS may show "app is damaged" when you first open it. Fix this by running:
+> ```bash
+> xattr -cr /Applications/USBGroove.app
+> ```
+> This is not needed when installing via Homebrew.
 
 ## Install via package manager
 
