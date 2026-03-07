@@ -49,3 +49,13 @@ Pushes to `main` trigger `.github/workflows/build.yml` which:
 1. Auto-generates version from commit count (v1.0, v1.1, etc.)
 2. Builds with MSVC on `windows-latest`
 3. Creates GitHub Release with `USBGroove.exe` attached
+
+## Workflow
+
+**Always create a pull request for changes. Never push directly to main.**
+
+1. Create a feature branch from `main`
+2. Commit changes to the branch
+3. Push the branch to remote
+4. Create a pull request for review
+5. Merge only after approval
