@@ -29,7 +29,7 @@ Download the latest release from [GitHub Releases](https://github.com/michaelnoe
 
 > **macOS Gatekeeper note:** Since the app is not code-signed, macOS may show "app is damaged" when you first open it. Fix this by running:
 > ```bash
-> xattr -cr /Applications/USBGroove.app
+> /usr/bin/xattr -cr /Applications/USBGroove.app
 > ```
 > This is not needed when installing via Homebrew.
 
