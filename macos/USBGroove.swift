@@ -94,10 +94,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         shuffle.state = shuffleOn ? .on : .off
         menu.addItem(shuffle)
 
-        let repeat_ = NSMenuItem(title: "Repeat All", action: #selector(toggleRepeat), keyEquivalent: "")
-        repeat_.target = self
-        repeat_.state = repeatAll ? .on : .off
-        menu.addItem(repeat_)
+        let repeatItem = NSMenuItem(title: "Repeat All", action: #selector(toggleRepeat), keyEquivalent: "")
+        repeatItem.target = self
+        repeatItem.state = repeatAll ? .on : .off
+        menu.addItem(repeatItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -116,7 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         if currentTrack >= 0 && !playlist.isEmpty {
             let title = trackTitle(currentTrack)
             let state = (player?.isPlaying == true) ? "" : " (paused)"
-            statusItem.button?.toolTip = "\(title) [\(currentTrack + 1)/\(playlist.count)]\(state)"
+            let suffix = repeatAll ? " ⟳" : ""
+            statusItem.button?.toolTip = "\(title) [\(currentTrack + 1)/\(playlist.count)]\(state)\(suffix)"
         } else {
             statusItem.button?.toolTip = "USB Groove — idle"
         }

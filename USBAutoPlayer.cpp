@@ -45,8 +45,8 @@
 #define ID_TRAY_STOP      1004
 #define ID_TRAY_SHUFFLE   1005
 #define ID_TRAY_ABOUT     1006
-#define ID_TRAY_REPEAT    1008
 #define ID_TRAY_EXIT      1007
+#define ID_TRAY_REPEAT    1008
 
 #define DRIVE_TIMER_BASE  100   // timers 100-125 = drive letters A-Z
 
@@ -320,11 +320,12 @@ void UpdateTrayTip()
     if (g_currentTrack >= 0 && !g_playlist.empty())
     {
         wchar_t tip[128];
-        swprintf_s(tip, L"%s  [%d/%d]%s",
+        swprintf_s(tip, L"%s  [%d/%d]%s%s",
             TrackTitle(g_currentTrack).c_str(),
             g_currentTrack + 1,
             static_cast<int>(g_playlist.size()),
-            g_isPaused ? L" (paused)" : L"");
+            g_isPaused ? L" (paused)" : L"",
+            g_repeatAll ? L" \u27F3" : L"");
         wcscpy_s(g_nid.szTip, tip);
     }
     else
@@ -375,7 +376,6 @@ void ShowContextMenu(HWND hWnd)
 
     UINT shuffleFlags = MF_BYPOSITION | MF_STRING | (g_shuffleOn ? MF_CHECKED : 0);
     InsertMenuW(hMenu, pos++, shuffleFlags, ID_TRAY_SHUFFLE, L"Shuffle");
-
     UINT repeatFlags = MF_BYPOSITION | MF_STRING | (g_repeatAll ? MF_CHECKED : 0);
     InsertMenuW(hMenu, pos++, repeatFlags, ID_TRAY_REPEAT, L"Repeat All");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
