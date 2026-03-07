@@ -1,0 +1,39 @@
+name: Publish to WinGet
+
+# Triggers when a new GitHub Release is published
+on:
+  release:
+    types: [published]
+
+jobs:
+  winget:
+    runs-on: windows-latest
+    steps:
+      - name: Submit package to WinGet
+        run: |
+          # Download wingetcreate
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+          # Parse release event to find the USBGroove.exe asset URL
+          $event = Get-Content '${{ github.event_path }}' | ConvertFrom-Json
+          $installerUrl = $event.release.assets |
+            Where-Object { $_.name -match 'USBGroove\.exe' } |
+            Select-Object -ExpandProperty browser_download_url -First 1
+
+          if (-not $installerUrl) {
+            Write-Error "USBGroove.exe not found in release assets"
+            exit 1
+          }
+
+          # Extract version from tag (strip leading 'v')
+          $version = '${{ github.event.release.tag_name }}' -replace '^v', ''
+
+          Write-Host "Submitting version $version"
+          Write-Host "Installer URL: $installerUrl"
+
+          # Update the manifest and submit a PR to microsoft/winget-pkgs
+          .\wingetcreate.exe update michaelnoergaard.USBGroove `
+            --version $version `
+            --urls $installerUrl `
+            --submit `
+            --token ${{ secrets.WINGET_PAT }}
