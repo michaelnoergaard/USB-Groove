@@ -23,6 +23,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     private var playlist: [URL] = []
     private var currentTrack: Int = -1
     private var shuffleOn: Bool = false
+    private var repeatAll: Bool = false
     private var daSession: DASession?
     private var mountedUSBPaths: Set<String> = []
 
@@ -93,6 +94,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         shuffle.state = shuffleOn ? .on : .off
         menu.addItem(shuffle)
 
+        let repeat_ = NSMenuItem(title: "Repeat All", action: #selector(toggleRepeat), keyEquivalent: "")
+        repeat_.target = self
+        repeat_.state = repeatAll ? .on : .off
+        menu.addItem(repeat_)
+
         menu.addItem(NSMenuItem.separator())
 
         let about = NSMenuItem(title: "About USB Groove", action: #selector(showAbout), keyEquivalent: "")
@@ -162,6 +168,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     @objc private func toggleShuffle() {
         shuffleOn.toggle()
         log(shuffleOn ? "Shuffle ON." : "Shuffle OFF.")
+        updateMenu()
+    }
+
+    @objc private func toggleRepeat() {
+        repeatAll.toggle()
+        log(repeatAll ? "Repeat All ON." : "Repeat All OFF.")
         updateMenu()
     }
 
@@ -376,6 +388,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         let next = currentTrack + 1
         if next < playlist.count {
             playTrack(next)
+        } else if repeatAll {
+            playTrack(0)
+            log("Repeat All — restarting playlist.")
         } else {
             currentTrack = -1
             self.player = nil
