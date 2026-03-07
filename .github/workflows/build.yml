@@ -41,7 +41,7 @@ jobs:
             /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN `
             /link `
             USBAutoPlayer.res `
-            winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib comctl32.lib `
+            winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib `
             /SUBSYSTEM:WINDOWS `
             /OUT:USBGroove.exe
 

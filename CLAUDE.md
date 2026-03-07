@@ -11,13 +11,13 @@ USB Groove (USBAutoPlayer) is a Windows 11 system tray application that automati
 ### MSVC (Developer Command Prompt)
 ```bash
 rc /fo USBAutoPlayer.res USBAutoPlayer.rc
-cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /link USBAutoPlayer.res winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib comctl32.lib /SUBSYSTEM:WINDOWS /OUT:USBGroove.exe
+cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /link USBAutoPlayer.res winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib /SUBSYSTEM:WINDOWS /OUT:USBGroove.exe
 ```
 
 ### MinGW / MSYS2
 ```bash
 windres USBAutoPlayer.rc -o USBAutoPlayer.res
-g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -o USBGroove.exe USBAutoPlayer.cpp USBAutoPlayer.res -lwinmm -lshell32 -luser32 -lgdi32 -lcomctl32 -mwindows
+g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -o USBGroove.exe USBAutoPlayer.cpp USBAutoPlayer.res -lwinmm -lshell32 -luser32 -lgdi32 -mwindows
 ```
 
 ## Architecture
@@ -34,7 +34,6 @@ Single-file C++ application with these major components:
 ### Key Windows APIs Used
 - `winmm.dll` (MCI): Audio playback via `mciSendStringW`
 - `shell32.dll`: System tray via `Shell_NotifyIconW`
-- `comctl32.dll`: Common controls (ListView for playlist window)
 - `dbt.h`: Device change notifications (`WM_DEVICECHANGE`, `DEV_BROADCAST_VOLUME`)
 
 ### Message Flow
