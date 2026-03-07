@@ -11,6 +11,7 @@ A lightweight tray/menu bar application that automatically plays MP3 files from 
 - **Auto-play** - Automatically detects USB drives and starts playing MP3 files
 - **System tray (Windows) / Menu bar (macOS)** - Runs quietly in the background
 - **Shuffle mode** - Randomize playback order with one click
+- **Repeat All** - Loop the entire playlist continuously
 - **Full playback controls** - Play, pause, stop, next/previous track
 - **Recursive scanning** - Finds MP3 files in all subdirectories
 - **No dependencies** - Uses only built-in OS libraries
@@ -58,6 +59,7 @@ brew install usb-groove
 | **Next track** | Skip to the next song |
 | **Stop** | Stop playback and clear playlist |
 | **Shuffle** | Enable/disable shuffle mode |
+| **Repeat All** | Loop playlist when it reaches the end |
 | **About** | View version information |
 
 ## Build from source
@@ -65,17 +67,20 @@ brew install usb-groove
 ### Windows (MSVC)
 
 ```cmd
+rc /fo USBAutoPlayer.res USBAutoPlayer.rc
 cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17 ^
     /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN ^
-    /link winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib ^
+    /link USBAutoPlayer.res ^
+    winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib ^
     /SUBSYSTEM:WINDOWS /OUT:USBGroove.exe
 ```
 
 ### Windows (MinGW / MSYS2)
 
 ```bash
+windres USBAutoPlayer.rc -O coff -o USBAutoPlayer.res
 g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN \
-    -o USBGroove.exe USBAutoPlayer.cpp \
+    -o USBGroove.exe USBAutoPlayer.cpp USBAutoPlayer.res \
     -lwinmm -lshell32 -luser32 -lgdi32 -mwindows
 ```
 
