@@ -80,6 +80,14 @@ g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN \
 
 5. **Auto-advance** - When a track finishes, automatically plays the next track in the playlist
 
+## Install via winget
+
+```powershell
+winget install michaelnoergaard.USBGroove
+```
+
+For details on how winget distribution works for this project, see [WINGET.md](WINGET.md).
+
 ## License
 
 This project is available under the MIT License.

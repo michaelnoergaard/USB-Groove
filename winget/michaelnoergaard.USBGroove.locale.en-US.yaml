@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: michaelnoergaard.USBGroove
+PackageVersion: "1.0"
+PackageLocale: en-US
+Publisher: michaelnoergaard
+PublisherUrl: https://github.com/michaelnoergaard
+PackageName: USB Groove
+PackageUrl: https://github.com/michaelnoergaard/USB-Groove
+License: MIT
+LicenseUrl: https://github.com/michaelnoergaard/USB-Groove/blob/main/LICENSE
+ShortDescription: System tray app that automatically plays MP3 files from inserted USB drives
+Tags:
+  - audio
+  - mp3
+  - music-player
+  - usb
+  - portable
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
