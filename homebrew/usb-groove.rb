@@ -19,7 +19,8 @@ cask "usb-groove" do
 
   postflight do
     system_command "/usr/bin/xattr",
-                   args: ["-cr", "#{appdir}/USBGroove.app"]
+                   args: ["-cr", "#{appdir}/USBGroove.app"],
+                   sudo: true
   end
 
   zap trash: [
