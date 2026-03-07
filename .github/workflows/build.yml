@@ -1,26 +1,32 @@
 name: Build and Release
 
-# Triggers:
-#   - Every push to main            → builds and uploads a draft release
-#   - Every version tag (v1.0, etc) → builds and publishes a real release
+# Triggers on every push to main
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
 
 jobs:
   build:
-    runs-on: windows-latest       # Microsoft's own Windows Server + MSVC
+    runs-on: windows-latest
 
     steps:
-      # 1. Check out your source code
+      # 1. Check out source code
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # needed to count all commits for version number
 
-      # 2. Set up MSVC (cl.exe) — already installed on windows-latest,
-      #    this action just puts it on the PATH
-      - name: Set up MSVC
+      # 2. Auto-generate version number based on commit count (1.0, 1.1, 1.2 ...)
+      - name: Generate version number
+        id: version
+        shell: bash
+        run: |
+          COUNT=$(git rev-list --count HEAD)
+          echo "number=1.$((COUNT - 1))" >> $GITHUB_OUTPUT
+          echo "tag=v1.$((COUNT - 1))" >> $GITHUB_OUTPUT
+
+      # 3. Set up MSVC
+      - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Configure MSVC environment
@@ -28,7 +34,7 @@ jobs:
         with:
           arch: x64
 
-      # 3. Compile with cl.exe — same command as build_msvc.bat
+      # 4. Compile with MSVC
       - name: Build
         run: |
           cl USBAutoPlayer.cpp `
@@ -37,31 +43,28 @@ jobs:
             /link `
             winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib `
             /SUBSYSTEM:WINDOWS `
-            /OUT:USBAutoPlayer.exe
+            /OUT:USBGroove.exe
 
-      # 4. On a version tag (v1.0, v1.1 etc) → publish a GitHub Release
-      #    with the .exe attached as a downloadable asset
+      # 5. Create GitHub Release and attach the .exe automatically
       - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: USB AutoPlayer ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: USB Groove ${{ steps.version.outputs.tag }}
           body: |
-            ## USB AutoPlayer ${{ github.ref_name }}
-            
+            ## USB Groove ${{ steps.version.outputs.tag }}
+
             Self-contained Windows 11 tray app — no installation required.
-            
-            **Download `USBAutoPlayer.exe` below and run it.**
-          files: USBAutoPlayer.exe
+
+            **Just download `USBGroove.exe` and run it. Nothing to install.**
+
+            ### What it does
+            - Automatically plays MP3 files from any inserted USB drive
+            - Sits silently in the system tray
+            - Right-click tray icon for controls (Pause, Next, Previous, Shuffle)
+
+            ### Changes in this release
+            ${{ github.event.head_commit.message }}
+          files: USBGroove.exe
           draft: false
           prerelease: false
-
-      # 4b. On a plain push to main → just upload the .exe as a build artifact
-      #     (visible under Actions → your workflow run → Artifacts)
-      - name: Upload build artifact
-        if: "!startsWith(github.ref, 'refs/tags/v')"
-        uses: actions/upload-artifact@v4
-        with:
-          name: USBAutoPlayer
-          path: USBAutoPlayer.exe
-          retention-days: 30
