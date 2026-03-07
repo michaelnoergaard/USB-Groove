@@ -6,19 +6,17 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     permissions:
-      contents: write     # required to create releases and upload assets
+      contents: write
 
     steps:
-      # 1. Check out source code
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # needed to count all commits for version number
+          fetch-depth: 0
 
-      # 2. Auto-generate version number based on commit count (1.0, 1.1, 1.2 ...)
       - name: Generate version number
         id: version
         shell: bash
@@ -27,7 +25,6 @@ jobs:
           echo "number=1.$((COUNT - 1))" >> $GITHUB_OUTPUT
           echo "tag=v1.$((COUNT - 1))" >> $GITHUB_OUTPUT
 
-      # 3. Set up MSVC
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
@@ -36,7 +33,6 @@ jobs:
         with:
           arch: x64
 
-      # 4. Compile with MSVC
       - name: Build
         run: |
           cl USBAutoPlayer.cpp `
@@ -47,26 +43,119 @@ jobs:
             /SUBSYSTEM:WINDOWS `
             /OUT:USBGroove.exe
 
-      # 5. Create GitHub Release and attach the .exe automatically
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: USBGroove.exe
+
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          swiftc macos/USBGroove.swift -o USBGroove \
+            -framework AVFoundation \
+            -framework DiskArbitration \
+            -framework AppKit \
+            -O
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p USBGroove.app/Contents/MacOS
+          mkdir -p USBGroove.app/Contents/Resources
+          cp USBGroove USBGroove.app/Contents/MacOS/USBGroove
+          cat > USBGroove.app/Contents/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>USB Groove</string>
+              <key>CFBundleDisplayName</key>
+              <string>USB Groove</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.michaelnoergaard.USBGroove</string>
+              <key>CFBundleVersion</key>
+              <string>1.0</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleExecutable</key>
+              <string>USBGroove</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>12.0</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Create zip
+        run: |
+          ditto -c -k --keepParent USBGroove.app USBGroove-macOS.zip
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: USBGroove-macOS.zip
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-build
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: USB Groove ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.build-windows.outputs.tag }}
+          name: USB Groove ${{ needs.build-windows.outputs.tag }}
           body: |
-            ## USB Groove ${{ steps.version.outputs.tag }}
+            ## USB Groove ${{ needs.build-windows.outputs.tag }}
 
-            Self-contained Windows 11 tray app — no installation required.
+            Lightweight tray/menu bar app — no installation required.
 
-            **Just download `USBGroove.exe` and run it. Nothing to install.**
+            ### Downloads
+            | Platform | File | Install |
+            |----------|------|---------|
+            | **Windows** | `USBGroove.exe` | Just download and run |
+            | **macOS** | `USBGroove-macOS.zip` | Unzip and move to Applications |
 
             ### What it does
             - Automatically plays MP3 files from any inserted USB drive
-            - Sits silently in the system tray
-            - Right-click tray icon for controls (Pause, Next, Previous, Shuffle)
+            - Sits in the system tray (Windows) or menu bar (macOS)
+            - Controls: Pause, Next, Previous, Shuffle
 
-            ### Changes in this release
-            ${{ github.event.head_commit.message }}
-          files: USBGroove.exe
+            ### Package managers
+            - **Windows:** `winget install michaelnoergaard.USBGroove`
+            - **macOS:** `brew tap michaelnoergaard/usb-groove && brew install usb-groove`
+          files: |
+            USBGroove.exe
+            USBGroove-macOS.zip
           draft: false
           prerelease: false
