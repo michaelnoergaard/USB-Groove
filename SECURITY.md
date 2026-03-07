@@ -12,7 +12,7 @@
 
 If you discover a security vulnerability in USB-Groove, please report it responsibly:
 
-1. **GitHub Security Advisories** (preferred): Go to the [Security tab](https://github.com/michael-fi/USB-Groove/security) and click "Report a vulnerability"
+1. **GitHub Security Advisories** (preferred): Go to the [Security tab](https://github.com/michaelnoergaard/USB-Groove/security) and click "Report a vulnerability"
 
 2. **Email**: If you cannot use GitHub Advisories, you can email the maintainer directly
 

@@ -1,0 +1,7 @@
+// Resource file for USB AutoPlayer
+// Embeds the application icon into the .exe
+
+#include <windows.h>
+
+// Icon resource — ID 1 is used by the shell for the .exe file icon
+1 ICON "icons/app.ico"
