@@ -47,7 +47,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "USB Groove")
+            // Try custom template icon from bundle Resources, fall back to system symbol
+            if let iconPath = Bundle.main.path(forResource: "StatusBarIconTemplate", ofType: "png"),
+               let icon = NSImage(contentsOfFile: iconPath) {
+                icon.isTemplate = true
+                button.image = icon
+            } else {
+                button.image = NSImage(systemSymbolName: "music.note", accessibilityDescription: "USB Groove")
+            }
             button.toolTip = "USB Groove — waiting for USB drive"
         }
         updateMenu()

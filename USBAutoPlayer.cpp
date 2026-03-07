@@ -111,7 +111,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = hInstance;
-    wc.hIcon         = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIcon         = LoadIconW(hInstance, MAKEINTRESOURCEW(1));
     wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     wc.lpszClassName = L"USBAutoPlayerClass";
     RegisterClassExW(&wc);
@@ -304,7 +304,7 @@ void AddTrayIcon(HWND hWnd)
     g_nid.uID              = IDI_TRAY;
     g_nid.uFlags           = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     g_nid.uCallbackMessage = WM_TRAYICON;
-    g_nid.hIcon            = LoadIconW(nullptr, IDI_APPLICATION);
+    g_nid.hIcon            = LoadIconW(g_hInstance, MAKEINTRESOURCEW(1));
     wcscpy_s(g_nid.szTip, L"USB AutoPlayer — waiting for USB drive");
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 }

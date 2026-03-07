@@ -10,12 +10,14 @@ USB Groove (USBAutoPlayer) is a Windows 11 system tray application that automati
 
 ### MSVC (Developer Command Prompt)
 ```bash
-cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /link winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib /SUBSYSTEM:WINDOWS /OUT:USBGroove.exe
+rc /fo USBAutoPlayer.res USBAutoPlayer.rc
+cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17 /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN /link USBAutoPlayer.res winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib /SUBSYSTEM:WINDOWS /OUT:USBGroove.exe
 ```
 
 ### MinGW / MSYS2
 ```bash
-g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -o USBGroove.exe USBAutoPlayer.cpp -lwinmm -lshell32 -luser32 -lgdi32 -mwindows
+windres USBAutoPlayer.rc -o USBAutoPlayer.res
+g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -o USBGroove.exe USBAutoPlayer.cpp USBAutoPlayer.res -lwinmm -lshell32 -luser32 -lgdi32 -mwindows
 ```
 
 ## Architecture
