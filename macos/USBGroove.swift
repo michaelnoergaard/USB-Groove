@@ -13,29 +13,207 @@
 import AppKit
 import AVFoundation
 import DiskArbitration
+import SwiftUI
+
+// MARK: - Track Info
+
+struct TrackInfo: Identifiable {
+    let id: Int
+    let index: Int
+    let name: String
+    let url: URL
+    var duration: String
+    var position: String
+    var isPlaying: Bool
+}
+
+// MARK: - Playlist Manager
+
+class PlaylistManager: ObservableObject {
+    @Published var tracks: [TrackInfo] = []
+    @Published var currentTrackIndex: Int = -1
+    private var updateTimer: Timer?
+    private weak var appDelegate: AppDelegate?
+
+    init(appDelegate: AppDelegate) {
+        self.appDelegate = appDelegate
+    }
+
+    func startUpdates() {
+        stopUpdates()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.refreshPosition()
+        }
+        RunLoop.main.add(updateTimer!, forMode: .common)
+    }
+
+    func stopUpdates() {
+        updateTimer?.invalidate()
+        updateTimer = nil
+    }
+
+    func refreshPosition() {
+        guard let appDelegate = appDelegate,
+              currentTrackIndex >= 0,
+              currentTrackIndex < tracks.count,
+              let player = appDelegate.player,
+              player.isPlaying else { return }
+
+        let currentTime = player.currentTime
+        let positionStr = formatTime(currentTime)
+        tracks[currentTrackIndex].position = positionStr
+    }
+
+    func updateTracks(_ urls: [URL], current: Int) {
+        currentTrackIndex = current
+        tracks = urls.enumerated().map { index, url in
+            let name = url.deletingPathExtension().lastPathComponent
+            let duration: String
+            var position: String = ""
+            let isPlaying = index == current
+
+            // Get duration from player if available
+            if let player = appDelegate?.player, index == current {
+                duration = formatTime(player.duration)
+                if player.isPlaying {
+                    position = formatTime(player.currentTime)
+                }
+            } else {
+                // Try to get duration from file
+                duration = getDurationForFile(url)
+            }
+
+            return TrackInfo(
+                id: index,
+                index: index,
+                name: name,
+                url: url,
+                duration: duration,
+                position: position,
+                isPlaying: isPlaying
+            )
+        }
+    }
+
+    func updateCurrentIndex(_ index: Int) {
+        // Clear old playing state
+        if currentTrackIndex >= 0 && currentTrackIndex < tracks.count {
+            tracks[currentTrackIndex].isPlaying = false
+            tracks[currentTrackIndex].position = ""
+        }
+
+        currentTrackIndex = index
+
+        // Set new playing state
+        if index >= 0 && index < tracks.count {
+            tracks[index].isPlaying = true
+            if let player = appDelegate?.player {
+                tracks[index].duration = formatTime(player.duration)
+            }
+        }
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let totalSeconds = Int(time)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func getDurationForFile(_ url: URL) -> String {
+        let asset = AVAsset(url: url)
+        let duration = asset.duration
+        let seconds = CMTimeGetSeconds(duration)
+        if seconds.isFinite && seconds > 0 {
+            return formatTime(seconds)
+        }
+        return "--:--"
+    }
+}
+
+// MARK: - Playlist View (SwiftUI)
+
+struct PlaylistView: View {
+    @ObservedObject var manager: PlaylistManager
+    let onTrackSelected: (Int) -> Void
+    @State private var selectedTrackIndex: Int?
+
+    var body: some View {
+        Table(manager.tracks, selection: $selectedTrackIndex) {
+            TableColumn("#") { track in
+                Text("\(track.index + 1)")
+                    .frame(width: 30, alignment: .trailing)
+            }
+            .width(min: 30, max: 40)
+
+            TableColumn("Track") { track in
+                HStack(spacing: 4) {
+                    if track.isPlaying {
+                        Image(systemName: "play.fill")
+                            .foregroundColor(.accentColor)
+                            .font(.system(size: 10))
+                    }
+                    Text(track.name)
+                        .fontWeight(track.isPlaying ? .bold : .regular)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    onTrackSelected(track.index)
+                }
+            }
+            .width(min: 150)
+
+            TableColumn("Duration") { track in
+                Text(track.duration)
+                    .foregroundColor(.secondary)
+                    .frame(width: 50, alignment: .trailing)
+            }
+            .width(min: 50, max: 60)
+
+            TableColumn("Position") { track in
+                Text(track.isPlaying ? track.position : "")
+                    .foregroundColor(.accentColor)
+                    .frame(width: 50, alignment: .trailing)
+            }
+            .width(min: 50, max: 60)
+        }
+        .contextMenu {
+            ForEach(manager.tracks) { track in
+                Button(track.name) {
+                    onTrackSelected(track.index)
+                }
+            }
+        }
+    }
+}
 
 // MARK: - App Delegate
 
-class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate, NSWindowDelegate {
 
     private var statusItem: NSStatusItem!
-    private var player: AVAudioPlayer?
+    private(set) var player: AVAudioPlayer?
     private var playlist: [URL] = []
     private var currentTrack: Int = -1
     private var shuffleOn: Bool = false
     private var repeatAll: Bool = false
     private var daSession: DASession?
     private var mountedUSBPaths: Set<String> = []
+    private var playlistManager: PlaylistManager!
+    private var playlistWindow: NSWindow?
 
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        playlistManager = PlaylistManager(appDelegate: self)
         setupStatusItem()
         setupDiskArbitration()
         log("USB Groove started. Waiting for USB drives...")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        playlistManager.stopUpdates()
+        playlistWindow?.close()
         stopPlayback()
         if let session = daSession {
             DASessionSetDispatchQueue(session, nil)
@@ -105,6 +283,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         repeatItem.target = self
         repeatItem.state = repeatAll ? .on : .off
         menu.addItem(repeatItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let playlistItem = NSMenuItem(title: "View Playlist", action: #selector(showPlaylistWindow), keyEquivalent: "l")
+        playlistItem.target = self
+        playlistItem.isEnabled = !playlist.isEmpty
+        menu.addItem(playlistItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -200,9 +385,57 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         alert.runModal()
     }
 
+    @objc private func showPlaylistWindow() {
+        // If window already exists, bring it to front
+        if let window = playlistWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        // Create SwiftUI view
+        let playlistView = PlaylistView(
+            manager: playlistManager,
+            onTrackSelected: { [weak self] index in
+                self?.playTrack(index)
+            }
+        )
+
+        // Create hosting controller
+        let hostingController = NSHostingController(rootView: playlistView)
+
+        // Create window
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "USB Groove - Playlist"
+        window.contentViewController = hostingController
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+
+        playlistWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Start position updates
+        playlistManager.startUpdates()
+    }
+
     @objc private func quitApp() {
         stopPlayback()
         NSApplication.shared.terminate(nil)
+    }
+
+    // MARK: - NSWindowDelegate
+
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window == playlistWindow {
+            playlistManager.stopUpdates()
+        }
     }
 
     // MARK: - Disk Arbitration (USB Detection)
@@ -273,6 +506,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
             if currentTrack >= 0, !playlist.isEmpty,
                playlist[currentTrack].path.hasPrefix(path) {
                 stopPlayback()
+                // Close playlist window
+                playlistWindow?.close()
+                playlistWindow = nil
+                playlistManager.stopUpdates()
                 showNotification(title: "USB Groove", body: "USB drive removed — playback stopped.")
             }
         }
@@ -367,6 +604,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
             updateTooltip()
             updateMenu()
 
+            // Update playlist manager
+            playlistManager.updateTracks(playlist, current: currentTrack)
+
             log("Playing [\(index + 1)/\(playlist.count)]: \(playlist[index].path)")
         } catch {
             log("Playback error: \(error.localizedDescription) — \(playlist[index].path)")
@@ -383,6 +623,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         player = nil
         playlist.removeAll()
         currentTrack = -1
+        playlistManager.updateTracks([], current: -1)
         updateTooltip()
         updateMenu()
         log("Playback stopped.")
@@ -402,6 +643,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         } else {
             currentTrack = -1
             self.player = nil
+            playlistManager.updateCurrentIndex(-1)
             updateTooltip()
             updateMenu()
             showNotification(title: "USB Groove", body: "Playlist finished.")
