@@ -1,0 +1,67 @@
+name: Build and Release
+
+# Triggers:
+#   - Every push to main            → builds and uploads a draft release
+#   - Every version tag (v1.0, etc) → builds and publishes a real release
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest       # Microsoft's own Windows Server + MSVC
+
+    steps:
+      # 1. Check out your source code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up MSVC (cl.exe) — already installed on windows-latest,
+      #    this action just puts it on the PATH
+      - name: Set up MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Configure MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # 3. Compile with cl.exe — same command as build_msvc.bat
+      - name: Build
+        run: |
+          cl USBAutoPlayer.cpp `
+            /O2 /W4 /EHsc /std:c++17 `
+            /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN `
+            /link `
+            winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib `
+            /SUBSYSTEM:WINDOWS `
+            /OUT:USBAutoPlayer.exe
+
+      # 4. On a version tag (v1.0, v1.1 etc) → publish a GitHub Release
+      #    with the .exe attached as a downloadable asset
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: USB AutoPlayer ${{ github.ref_name }}
+          body: |
+            ## USB AutoPlayer ${{ github.ref_name }}
+            
+            Self-contained Windows 11 tray app — no installation required.
+            
+            **Download `USBAutoPlayer.exe` below and run it.**
+          files: USBAutoPlayer.exe
+          draft: false
+          prerelease: false
+
+      # 4b. On a plain push to main → just upload the .exe as a build artifact
+      #     (visible under Actions → your workflow run → Artifacts)
+      - name: Upload build artifact
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: USBAutoPlayer
+          path: USBAutoPlayer.exe
+          retention-days: 30
