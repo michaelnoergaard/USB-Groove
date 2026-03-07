@@ -11,20 +11,19 @@
 // Build (MSVC — Developer Command Prompt):
 //   cl USBAutoPlayer.cpp /O2 /W4 /EHsc /std:c++17
 //       /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN
-//       /link winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib comctl32.lib
+//       /link winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib
 //       /SUBSYSTEM:WINDOWS /OUT:USBAutoPlayer.exe
 //
 // Build (MinGW / MSYS2 — any terminal with mingw64/bin in PATH):
 //   g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN
 //       -o USBAutoPlayer.exe USBAutoPlayer.cpp
-//       -lwinmm -lshell32 -luser32 -lgdi32 -lcomctl32 -mwindows
+//       -lwinmm -lshell32 -luser32 -lgdi32 -mwindows
 // =============================================================================
 
 #include <windows.h>
 #include <shellapi.h>   // Shell_NotifyIcon
 #include <dbt.h>        // WM_DEVICECHANGE, DEV_BROADCAST_VOLUME
 #include <mmsystem.h>   // mciSendStringW, MM_MCINOTIFY
-#include <commctrl.h>   // ListView control
 
 #include <string>
 #include <vector>
@@ -48,10 +47,9 @@
 #define ID_TRAY_ABOUT     1006
 #define ID_TRAY_EXIT      1007
 #define ID_TRAY_REPEAT    1008
-#define ID_TRAY_PLAYLIST  1009
+#define ID_PLAYLIST_BASE  2000  // menu IDs 2000+ = playlist track items
 
 #define DRIVE_TIMER_BASE  100   // timers 100-125 = drive letters A-Z
-#define PLAYLIST_UPDATE_TIMER  200
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -68,15 +66,10 @@ static bool            g_shuffleOn    = false;
 static bool            g_repeatAll    = false;
 static bool            g_mciOpen      = false;
 
-static HWND            g_hPlaylistWnd     = nullptr;
-static HWND            g_hPlaylistListView = nullptr;
-static std::vector<int> g_trackDurations;  // cached durations in ms
-
 // ---------------------------------------------------------------------------
 // Forward declarations
 // ---------------------------------------------------------------------------
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-LRESULT CALLBACK PlaylistWndProc(HWND, UINT, WPARAM, LPARAM);
 void AddTrayIcon(HWND hWnd);
 void RemoveTrayIcon();
 void UpdateTrayTip();
@@ -96,13 +89,6 @@ void PrevTrack();
 std::wstring TrackTitle(int index);
 std::wstring GetTempDir();
 void Log(const std::wstring& msg);
-void ShowPlaylistWindow();
-void UpdatePlaylistSelection();
-void ClosePlaylistWindow();
-void PopulatePlaylistListView();
-std::wstring GetTrackDuration(int index);
-std::wstring FormatTime(int ms);
-std::wstring GetTrackName(int index);
 
 // ---------------------------------------------------------------------------
 // WinMain
@@ -211,12 +197,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             if (next < static_cast<int>(g_playlist.size()))
             {
                 PlayTrack(next);
-                UpdatePlaylistSelection();
             }
             else if (g_repeatAll)
             {
                 PlayTrack(0);
-                UpdatePlaylistSelection();
                 Log(L"Repeat All — restarting playlist.");
             }
             else
@@ -225,7 +209,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 MciClose();
                 g_currentTrack = -1;
                 UpdateTrayTip();
-                UpdatePlaylistSelection();
                 ShowBalloon(APP_NAME, L"Playlist finished.");
                 Log(L"Playlist finished.");
             }
@@ -284,9 +267,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             ShowBalloon(APP_NAME,
                 g_repeatAll ? L"Repeat All enabled." : L"Repeat All disabled.");
             break;
-        case ID_TRAY_PLAYLIST:
-            ShowPlaylistWindow();
-            break;
         case ID_TRAY_ABOUT:
             MessageBoxW(hWnd,
                 L"USB AutoPlayer v2.0\n\n"
@@ -300,6 +280,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             StopPlayback();
             PostQuitMessage(0);
             break;
+        default:
+        {
+            WORD id = LOWORD(wParam);
+            if (id >= ID_PLAYLIST_BASE && id < ID_PLAYLIST_BASE + static_cast<int>(g_playlist.size()))
+                PlayTrack(id - ID_PLAYLIST_BASE);
+            break;
+        }
         }
         break;
     }
@@ -401,9 +388,26 @@ void ShowContextMenu(HWND hWnd)
     InsertMenuW(hMenu, pos++, repeatFlags, ID_TRAY_REPEAT, L"Repeat All");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
-    InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_PLAYLIST, L"View Playlist");
-    if (g_playlist.empty())
-        EnableMenuItem(hMenu, ID_TRAY_PLAYLIST, MF_BYCOMMAND | MF_GRAYED);
+    // Playlist submenu — list all tracks, current track gets a bullet
+    if (!g_playlist.empty())
+    {
+        HMENU hPlaylist = CreatePopupMenu();
+        int limit = static_cast<int>(g_playlist.size());
+        if (limit > 50) limit = 50;  // cap submenu length
+        for (int i = 0; i < limit; ++i)
+        {
+            UINT flags = MF_STRING;
+            if (i == g_currentTrack)
+                flags |= MF_CHECKED;
+            std::wstring label = std::to_wstring(i + 1) + L". " + TrackTitle(i);
+            AppendMenuW(hPlaylist, flags, ID_PLAYLIST_BASE + i, label.c_str());
+        }
+        if (static_cast<int>(g_playlist.size()) > 50)
+            AppendMenuW(hPlaylist, MF_STRING | MF_GRAYED, 0,
+                (L"... and " + std::to_wstring(g_playlist.size() - 50) + L" more").c_str());
+        InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_POPUP,
+            reinterpret_cast<UINT_PTR>(hPlaylist), L"Playlist");
+    }
 
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_ABOUT, L"About");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_EXIT,  L"Exit");
@@ -527,14 +531,6 @@ void StartPlaylist(std::vector<std::wstring> tracks)
         std::shuffle(g_playlist.begin(), g_playlist.end(), rng);
     }
 
-    // Cache track durations
-    g_trackDurations.clear();
-    g_trackDurations.resize(g_playlist.size(), 0);
-    for (size_t i = 0; i < g_playlist.size(); ++i)
-    {
-        g_trackDurations[i] = 0; // Will be lazy-loaded when displayed
-    }
-
     PlayTrack(0);
 }
 
@@ -587,9 +583,7 @@ void PlayTrack(int index)
 void StopPlayback()
 {
     MciClose();
-    ClosePlaylistWindow();
     g_playlist.clear();
-    g_trackDurations.clear();
     g_currentTrack = -1;
     g_isPaused     = false;
     UpdateTrayTip();
@@ -684,298 +678,4 @@ void Log(const std::wstring& msg)
     if (!narrow.empty() && narrow.back() == '\0') narrow.pop_back();
 
     ofs << ts << narrow << "\r\n";
-}
-
-// ---------------------------------------------------------------------------
-// Playlist Window
-// ---------------------------------------------------------------------------
-std::wstring FormatTime(int ms)
-{
-    if (ms <= 0) return L"--:--";
-    int totalSec = ms / 1000;
-    int min = totalSec / 60;
-    int sec = totalSec % 60;
-    wchar_t buf[16];
-    swprintf_s(buf, L"%d:%02d", min, sec);
-    return buf;
-}
-
-std::wstring GetTrackName(int index)
-{
-    if (index < 0 || index >= static_cast<int>(g_playlist.size()))
-        return L"(none)";
-
-    const std::wstring& path = g_playlist[index];
-    auto slash = path.find_last_of(L"\\/");
-    std::wstring name = (slash != std::wstring::npos) ? path.substr(slash + 1) : path;
-
-    // Strip .mp3
-    if (name.size() > 4 && name.compare(name.size() - 4, 4, L".mp3") == 0)
-        name = name.substr(0, name.size() - 4);
-
-    return name;
-}
-
-std::wstring GetTrackDuration(int index)
-{
-    if (index < 0 || index >= static_cast<int>(g_playlist.size()))
-        return L"--:--";
-
-    // Return cached duration if available
-    if (g_trackDurations[index] > 0)
-        return FormatTime(g_trackDurations[index]);
-
-    // Otherwise, query MCI for the duration (lazy load)
-    std::wstring openCmd = L"open \"" + g_playlist[index] + L"\" type mpegvideo alias duration_check";
-    MCIERROR err = mciSendStringW(openCmd.c_str(), nullptr, 0, nullptr);
-    if (err != 0)
-        return L"--:--";
-
-    wchar_t buf[64] = {};
-    mciSendStringW(L"status duration_check length", buf, 64, nullptr);
-    mciSendStringW(L"close duration_check", nullptr, 0, nullptr);
-
-    int ms = _wtoi(buf);
-    g_trackDurations[index] = ms;
-    return FormatTime(ms);
-}
-
-void PopulatePlaylistListView()
-{
-    if (!g_hPlaylistListView) return;
-
-    // Clear existing items
-    ListView_DeleteAllItems(g_hPlaylistListView);
-
-    // Add items from playlist
-    for (int i = 0; i < static_cast<int>(g_playlist.size()); ++i)
-    {
-        LVITEMW lvi = {};
-        lvi.mask = LVIF_TEXT;
-        lvi.iItem = i;
-
-        // Column 0: Track number
-        wchar_t num[8];
-        swprintf_s(num, L"%d", i + 1);
-        lvi.iSubItem = 0;
-        lvi.pszText = num;
-        int idx = ListView_InsertItem(g_hPlaylistListView, &lvi);
-
-        // Column 1: Track name
-        std::wstring name = GetTrackName(i);
-        lvi.iSubItem = 1;
-        lvi.pszText = const_cast<wchar_t*>(name.c_str());
-        ListView_SetItem(g_hPlaylistListView, &lvi);
-
-        // Column 2: Duration
-        std::wstring duration = GetTrackDuration(i);
-        lvi.iSubItem = 2;
-        lvi.pszText = const_cast<wchar_t*>(duration.c_str());
-        ListView_SetItem(g_hPlaylistListView, &lvi);
-
-        // Column 3: Position (empty for now, updated by timer)
-        lvi.iSubItem = 3;
-        lvi.pszText = const_cast<wchar_t*>(L"");
-        ListView_SetItem(g_hPlaylistListView, &lvi);
-    }
-
-    UpdatePlaylistSelection();
-}
-
-void UpdatePlaylistSelection()
-{
-    if (!g_hPlaylistListView || !g_hPlaylistWnd) return;
-
-    // Clear all selections
-    for (int i = 0; i < static_cast<int>(g_playlist.size()); ++i)
-    {
-        ListView_SetItemState(g_hPlaylistListView, i, 0, LVIS_SELECTED | LVIS_FOCUSED);
-    }
-
-    // Select and scroll to current track
-    if (g_currentTrack >= 0 && g_currentTrack < static_cast<int>(g_playlist.size()))
-    {
-        ListView_SetItemState(g_hPlaylistListView, g_currentTrack,
-            LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-        ListView_EnsureVisible(g_hPlaylistListView, g_currentTrack, FALSE);
-    }
-}
-
-void ClosePlaylistWindow()
-{
-    if (g_hPlaylistWnd)
-    {
-        DestroyWindow(g_hPlaylistWnd);
-        g_hPlaylistWnd = nullptr;
-        g_hPlaylistListView = nullptr;
-    }
-}
-
-LRESULT CALLBACK PlaylistWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    switch (uMsg)
-    {
-    case WM_CREATE:
-    {
-        // Initialize common controls
-        INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_LISTVIEW_CLASSES };
-        InitCommonControlsEx(&icc);
-
-        // Create ListView control
-        RECT rcClient;
-        GetClientRect(hWnd, &rcClient);
-
-        g_hPlaylistListView = CreateWindowExW(0, WC_LISTVIEWW, L"",
-            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SINGLESEL,
-            0, 0, rcClient.right - rcClient.left, rcClient.bottom - rcClient.top,
-            hWnd, nullptr, g_hInstance, nullptr);
-
-        if (!g_hPlaylistListView)
-        {
-            MessageBoxW(hWnd, L"Failed to create list view.", APP_NAME, MB_ICONERROR);
-            return -1;
-        }
-
-        // Set extended styles
-        ListView_SetExtendedListViewStyle(g_hPlaylistListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-
-        // Add columns
-        LVCOLUMNW lvc = {};
-        lvc.mask = LVCF_TEXT | LVCF_WIDTH;
-
-        // Column 0: # (30px)
-        lvc.pszText = const_cast<wchar_t*>(L"#");
-        lvc.cx = 30;
-        ListView_InsertColumn(g_hPlaylistListView, 0, &lvc);
-
-        // Column 1: Track Name (200px)
-        lvc.pszText = const_cast<wchar_t*>(L"Track Name");
-        lvc.cx = 200;
-        ListView_InsertColumn(g_hPlaylistListView, 1, &lvc);
-
-        // Column 2: Duration (70px)
-        lvc.pszText = const_cast<wchar_t*>(L"Duration");
-        lvc.cx = 70;
-        ListView_InsertColumn(g_hPlaylistListView, 2, &lvc);
-
-        // Column 3: Position (70px)
-        lvc.pszText = const_cast<wchar_t*>(L"Position");
-        lvc.cx = 70;
-        ListView_InsertColumn(g_hPlaylistListView, 3, &lvc);
-
-        // Populate the list
-        PopulatePlaylistListView();
-
-        // Start update timer (1 second)
-        SetTimer(hWnd, PLAYLIST_UPDATE_TIMER, 1000, nullptr);
-
-        return 0;
-    }
-
-    case WM_TIMER:
-    {
-        if (wParam == PLAYLIST_UPDATE_TIMER && g_hPlaylistListView)
-        {
-            // Update position column for current track
-            if (g_currentTrack >= 0 && g_currentTrack < static_cast<int>(g_playlist.size()) && g_mciOpen)
-            {
-                wchar_t posBuf[64] = {};
-                mciSendStringW(L"status player position", posBuf, 64, nullptr);
-                int posMs = _wtoi(posBuf);
-
-                std::wstring posStr = FormatTime(posMs);
-                if (!g_isPaused)
-                    posStr += L" \u25B6"; // Add play symbol
-
-                LVITEMW lvi = {};
-                lvi.mask = LVIF_TEXT;
-                lvi.iItem = g_currentTrack;
-                lvi.iSubItem = 3;
-                lvi.pszText = const_cast<wchar_t*>(posStr.c_str());
-                ListView_SetItem(g_hPlaylistListView, &lvi);
-            }
-        }
-        return 0;
-    }
-
-    case WM_NOTIFY:
-    {
-        LPNMHDR pnmhdr = reinterpret_cast<LPNMHDR>(lParam);
-        if (pnmhdr && pnmhdr->code == NM_DBLCLK && pnmhdr->hwndFrom == g_hPlaylistListView)
-        {
-            LPNMITEMACTIVATE pnmitem = reinterpret_cast<LPNMITEMACTIVATE>(lParam);
-            if (pnmitem->iItem >= 0 && pnmitem->iItem < static_cast<int>(g_playlist.size()))
-            {
-                PlayTrack(pnmitem->iItem);
-                UpdatePlaylistSelection();
-            }
-        }
-        return 0;
-    }
-
-    case WM_SIZE:
-    {
-        if (g_hPlaylistListView)
-        {
-            int width = LOWORD(lParam);
-            int height = HIWORD(lParam);
-            SetWindowPos(g_hPlaylistListView, nullptr, 0, 0, width, height, SWP_NOZORDER);
-        }
-        return 0;
-    }
-
-    case WM_CLOSE:
-        DestroyWindow(hWnd);
-        g_hPlaylistWnd = nullptr;
-        g_hPlaylistListView = nullptr;
-        return 0;
-
-    case WM_DESTROY:
-        KillTimer(hWnd, PLAYLIST_UPDATE_TIMER);
-        return 0;
-
-    default:
-        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
-    }
-    return 0;
-}
-
-void ShowPlaylistWindow()
-{
-    // If window already exists, bring it to front
-    if (g_hPlaylistWnd)
-    {
-        SetForegroundWindow(g_hPlaylistWnd);
-        ShowWindow(g_hPlaylistWnd, SW_RESTORE);
-        return;
-    }
-
-    // Register playlist window class (once)
-    static bool registered = false;
-    if (!registered)
-    {
-        WNDCLASSEXW wc = {};
-        wc.cbSize = sizeof(wc);
-        wc.lpfnWndProc = PlaylistWndProc;
-        wc.hInstance = g_hInstance;
-        wc.hIcon = LoadIconW(g_hInstance, MAKEINTRESOURCEW(1));
-        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = L"USBGroovePlaylistClass";
-        RegisterClassExW(&wc);
-        registered = true;
-    }
-
-    // Create the window
-    g_hPlaylistWnd = CreateWindowExW(0,
-        L"USBGroovePlaylistClass", L"USB Groove - Playlist",
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_SIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 500, 400,
-        nullptr, nullptr, g_hInstance, nullptr);
-
-    if (g_hPlaylistWnd)
-    {
-        ShowWindow(g_hPlaylistWnd, SW_SHOW);
-        UpdateWindow(g_hPlaylistWnd);
-    }
 }
