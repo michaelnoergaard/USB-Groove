@@ -75,8 +75,9 @@ jobs:
         run: |
           mkdir -p AppIcon.iconset
           # Use the 256px icon as base and resize for all iconset slots
-          pip3 install Pillow
-          python3 -c "
+          python3 -m venv .venv
+          .venv/bin/pip install Pillow
+          .venv/bin/python3 -c "
           from PIL import Image
           src = Image.open('icons/app_256.png')
           sizes = {
