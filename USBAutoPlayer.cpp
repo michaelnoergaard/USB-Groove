@@ -45,6 +45,7 @@
 #define ID_TRAY_STOP      1004
 #define ID_TRAY_SHUFFLE   1005
 #define ID_TRAY_ABOUT     1006
+#define ID_TRAY_REPEAT    1008
 #define ID_TRAY_EXIT      1007
 
 #define DRIVE_TIMER_BASE  100   // timers 100-125 = drive letters A-Z
@@ -61,6 +62,7 @@ static std::vector<std::wstring> g_playlist;
 static int             g_currentTrack = -1;
 static bool            g_isPaused     = false;
 static bool            g_shuffleOn    = false;
+static bool            g_repeatAll    = false;
 static bool            g_mciOpen      = false;
 
 // ---------------------------------------------------------------------------
@@ -195,6 +197,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             {
                 PlayTrack(next);
             }
+            else if (g_repeatAll)
+            {
+                PlayTrack(0);
+                Log(L"Repeat All — restarting playlist.");
+            }
             else
             {
                 // End of playlist
@@ -252,6 +259,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             Log(g_shuffleOn ? L"Shuffle ON." : L"Shuffle OFF.");
             ShowBalloon(APP_NAME,
                 g_shuffleOn ? L"Shuffle enabled." : L"Shuffle disabled.");
+            break;
+        case ID_TRAY_REPEAT:
+            g_repeatAll = !g_repeatAll;
+            Log(g_repeatAll ? L"Repeat All ON." : L"Repeat All OFF.");
+            ShowBalloon(APP_NAME,
+                g_repeatAll ? L"Repeat All enabled." : L"Repeat All disabled.");
             break;
         case ID_TRAY_ABOUT:
             MessageBoxW(hWnd,
@@ -362,6 +375,9 @@ void ShowContextMenu(HWND hWnd)
 
     UINT shuffleFlags = MF_BYPOSITION | MF_STRING | (g_shuffleOn ? MF_CHECKED : 0);
     InsertMenuW(hMenu, pos++, shuffleFlags, ID_TRAY_SHUFFLE, L"Shuffle");
+
+    UINT repeatFlags = MF_BYPOSITION | MF_STRING | (g_repeatAll ? MF_CHECKED : 0);
+    InsertMenuW(hMenu, pos++, repeatFlags, ID_TRAY_REPEAT, L"Repeat All");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_ABOUT, L"About");
