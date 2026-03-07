@@ -130,66 +130,8 @@ jobs:
           </plist>
           PLIST
 
-      - name: Import signing certificate
-        if: env.APPLE_CERTIFICATE_BASE64 != ''
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          # Create temporary keychain
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          # Import certificate
-          CERT_PATH=$RUNNER_TEMP/certificate.p12
-          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
-          security import "$CERT_PATH" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-          rm "$CERT_PATH"
-
-          # Add keychain to search list
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-
-      - name: Sign app bundle
-        if: env.APPLE_CERTIFICATE_BASE64 != ''
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          codesign --force --options runtime \
-            --sign "Developer ID Application: ($APPLE_TEAM_ID)" \
-            --timestamp \
-            --deep \
-            USBGroove.app
-
       - name: Create zip
         run: |
-          ditto -c -k --keepParent USBGroove.app USBGroove-macOS.zip
-
-      - name: Notarize app
-        if: env.APPLE_CERTIFICATE_BASE64 != ''
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          xcrun notarytool submit USBGroove-macOS.zip \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_ID_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
-
-          # Staple the notarization ticket to the app
-          xcrun stapler staple USBGroove.app
-
-          # Re-create the zip with the stapled app
-          rm USBGroove-macOS.zip
           ditto -c -k --keepParent USBGroove.app USBGroove-macOS.zip
 
       - name: Upload macOS artifact
