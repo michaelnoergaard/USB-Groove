@@ -47,6 +47,7 @@
 #define ID_TRAY_ABOUT     1006
 #define ID_TRAY_EXIT      1007
 #define ID_TRAY_REPEAT    1008
+#define ID_TRAY_AUTORUN   1009
 #define ID_PLAYLIST_BASE  2000  // menu IDs 2000+ = playlist track items
 
 #define DRIVE_TIMER_BASE  100   // timers 100-125 = drive letters A-Z
@@ -267,6 +268,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             ShowBalloon(APP_NAME,
                 g_repeatAll ? L"Repeat All enabled." : L"Repeat All disabled.");
             break;
+        case ID_TRAY_AUTORUN:
+            ToggleAutorun();
+            if (IsAutorunEnabled())
+            {
+                Log(L"Start with Windows ON.");
+                ShowBalloon(APP_NAME, L"Start with Windows enabled.");
+            }
+            else
+            {
+                Log(L"Start with Windows OFF.");
+                ShowBalloon(APP_NAME, L"Start with Windows disabled.");
+            }
+            break;
         case ID_TRAY_ABOUT:
             MessageBoxW(hWnd,
                 L"USB AutoPlayer v2.0\n\n"
@@ -353,6 +367,44 @@ void ShowBalloon(const wchar_t* title, const wchar_t* text, DWORD icon)
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
 }
 
+// ---------------------------------------------------------------------------
+// Autorun (Start with Windows) helpers
+// ---------------------------------------------------------------------------
+static const wchar_t* AUTORUN_KEY = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run";
+static const wchar_t* AUTORUN_VALUE = L"USBGroove";
+
+bool IsAutorunEnabled()
+{
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, AUTORUN_KEY, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+        return false;
+
+    bool exists = (RegQueryValueExW(hKey, AUTORUN_VALUE, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS);
+    RegCloseKey(hKey);
+    return exists;
+}
+
+void ToggleAutorun()
+{
+    HKEY hKey = nullptr;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, AUTORUN_KEY, 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS)
+        return;
+
+    if (IsAutorunEnabled())
+    {
+        RegDeleteValueW(hKey, AUTORUN_VALUE);
+    }
+    else
+    {
+        wchar_t exePath[MAX_PATH];
+        GetModuleFileNameW(NULL, exePath, MAX_PATH);
+        RegSetValueExW(hKey, AUTORUN_VALUE, 0, REG_SZ,
+            reinterpret_cast<const BYTE*>(exePath),
+            static_cast<DWORD>((wcslen(exePath) + 1) * sizeof(wchar_t)));
+    }
+    RegCloseKey(hKey);
+}
+
 void ShowContextMenu(HWND hWnd)
 {
     const bool active = (g_currentTrack >= 0 && !g_playlist.empty());
@@ -386,6 +438,8 @@ void ShowContextMenu(HWND hWnd)
     InsertMenuW(hMenu, pos++, shuffleFlags, ID_TRAY_SHUFFLE, L"Shuffle");
     UINT repeatFlags = MF_BYPOSITION | MF_STRING | (g_repeatAll ? MF_CHECKED : 0);
     InsertMenuW(hMenu, pos++, repeatFlags, ID_TRAY_REPEAT, L"Repeat All");
+    UINT autorunFlags = MF_BYPOSITION | MF_STRING | (IsAutorunEnabled() ? MF_CHECKED : 0);
+    InsertMenuW(hMenu, pos++, autorunFlags, ID_TRAY_AUTORUN, L"Start with Windows");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
     // Playlist submenu — list all tracks, current track gets a bullet
