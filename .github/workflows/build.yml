@@ -189,6 +189,7 @@ jobs:
           prerelease: false
 
       - name: Update winget package
+        continue-on-error: true
         if: env.WINGET_PAT != ''
         env:
           WINGET_PAT: ${{ secrets.WINGET_PAT }}
