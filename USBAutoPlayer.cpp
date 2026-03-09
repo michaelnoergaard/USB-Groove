@@ -85,6 +85,8 @@ void MciClose();
 void PlayTrack(int index);
 void StopPlayback();
 void PauseResume();
+bool IsAutorunEnabled();
+void ToggleAutorun();
 void NextTrack();
 void PrevTrack();
 std::wstring TrackTitle(int index);
