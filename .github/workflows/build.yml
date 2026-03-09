@@ -53,6 +53,7 @@ jobs:
 
     outputs:
       tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.number }}
 
   build-macos:
     runs-on: macos-latest
@@ -186,3 +187,14 @@ jobs:
             USBGroove-macOS.zip
           draft: false
           prerelease: false
+
+      - name: Update winget package
+        if: env.WINGET_PAT != ''
+        env:
+          WINGET_PAT: ${{ secrets.WINGET_PAT }}
+        uses: vedantmgoyal9/winget-releaser@main
+        with:
+          identifier: michaelnoergaard.USBGroove
+          version: ${{ needs.build-windows.outputs.version }}
+          installers-regex: 'USBGroove\.exe$'
+          token: ${{ secrets.WINGET_PAT }}
