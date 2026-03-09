@@ -148,6 +148,36 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          TAG="${{ needs.build-windows.outputs.tag }}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --no-merges)
+          fi
+          {
+            echo "## Changes"
+            echo "${CHANGES}"
+            echo ""
+            echo "## Downloads"
+            echo "| Platform | File | Install |"
+            echo "|----------|------|---------|"
+            echo "| **Windows** | \`USBGroove.exe\` | Just download and run |"
+            echo "| **macOS** | \`USBGroove-macOS.zip\` | Unzip and move to Applications |"
+            echo ""
+            echo "## Package managers"
+            echo "- **Windows:** \`winget install michaelnoergaard.USBGroove\`"
+            echo "- **macOS:** \`brew tap michaelnoergaard/usb-groove && brew install usb-groove\`"
+          } > /tmp/release-notes.md
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -163,25 +193,7 @@ jobs:
         with:
           tag_name: ${{ needs.build-windows.outputs.tag }}
           name: USB Groove ${{ needs.build-windows.outputs.tag }}
-          body: |
-            ## USB Groove ${{ needs.build-windows.outputs.tag }}
-
-            Lightweight tray/menu bar app — no installation required.
-
-            ### Downloads
-            | Platform | File | Install |
-            |----------|------|---------|
-            | **Windows** | `USBGroove.exe` | Just download and run |
-            | **macOS** | `USBGroove-macOS.zip` | Unzip and move to Applications |
-
-            ### What it does
-            - Automatically plays MP3 files from any inserted USB drive
-            - Sits in the system tray (Windows) or menu bar (macOS)
-            - Controls: Pause, Next, Previous, Shuffle
-
-            ### Package managers
-            - **Windows:** `winget install michaelnoergaard.USBGroove`
-            - **macOS:** `brew tap michaelnoergaard/usb-groove && brew install usb-groove`
+          body_path: /tmp/release-notes.md
           files: |
             USBGroove.exe
             USBGroove-macOS.zip
