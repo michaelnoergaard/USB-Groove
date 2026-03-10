@@ -24,6 +24,7 @@
 #include <shellapi.h>   // Shell_NotifyIcon
 #include <dbt.h>        // WM_DEVICECHANGE, DEV_BROADCAST_VOLUME
 #include <mmsystem.h>   // mciSendStringW, MM_MCINOTIFY
+#include <winioctl.h>   // IOCTL_STORAGE_EJECT_MEDIA
 
 #include <string>
 #include <vector>
@@ -48,6 +49,7 @@
 #define ID_TRAY_EXIT      1007
 #define ID_TRAY_REPEAT    1008
 #define ID_TRAY_AUTORUN   1009
+#define ID_TRAY_EJECT     1010
 #define ID_PLAYLIST_BASE  2000  // menu IDs 2000+ = playlist track items
 
 #define DRIVE_TIMER_BASE  100   // timers 100-125 = drive letters A-Z
@@ -66,6 +68,7 @@ static bool            g_isPaused     = false;
 static bool            g_shuffleOn    = false;
 static bool            g_repeatAll    = false;
 static bool            g_mciOpen      = false;
+static wchar_t         g_activeDriveLetter = 0;
 
 // ---------------------------------------------------------------------------
 // Forward declarations
@@ -89,6 +92,7 @@ bool IsAutorunEnabled();
 void ToggleAutorun();
 void NextTrack();
 void PrevTrack();
+void EjectUSB();
 std::wstring TrackTitle(int index);
 std::wstring GetTempDir();
 void Log(const std::wstring& msg);
@@ -258,6 +262,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case ID_TRAY_NEXT:      NextTrack();    break;
         case ID_TRAY_PREV:      PrevTrack();    break;
         case ID_TRAY_STOP:      StopPlayback(); break;
+        case ID_TRAY_EJECT:     EjectUSB();     break;
         case ID_TRAY_SHUFFLE:
             g_shuffleOn = !g_shuffleOn;
             Log(g_shuffleOn ? L"Shuffle ON." : L"Shuffle OFF.");
@@ -434,6 +439,7 @@ void ShowContextMenu(HWND hWnd)
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_PREV, L"Previous track");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_NEXT, L"Next track");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_STOP, L"Stop");
+    InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_STRING, ID_TRAY_EJECT, L"Eject USB");
     InsertMenuW(hMenu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
 
     UINT shuffleFlags = MF_BYPOSITION | MF_STRING | (g_shuffleOn ? MF_CHECKED : 0);
@@ -475,6 +481,8 @@ void ShowContextMenu(HWND hWnd)
         EnableMenuItem(hMenu, ID_TRAY_NEXT,      MF_BYCOMMAND | MF_GRAYED);
         EnableMenuItem(hMenu, ID_TRAY_STOP,      MF_BYCOMMAND | MF_GRAYED);
     }
+    if (g_activeDriveLetter == 0)
+        EnableMenuItem(hMenu, ID_TRAY_EJECT, MF_BYCOMMAND | MF_GRAYED);
 
     SetForegroundWindow(hWnd);
     TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN,
@@ -529,6 +537,7 @@ void OnDriveInserted(wchar_t driveLetter)
     ShowBalloon(APP_NAME, info);
     Log(info);
 
+    g_activeDriveLetter = driveLetter;
     StartPlaylist(std::move(mp3s));
 }
 
@@ -642,6 +651,7 @@ void StopPlayback()
     g_playlist.clear();
     g_currentTrack = -1;
     g_isPaused     = false;
+    g_activeDriveLetter = 0;
     UpdateTrayTip();
     Log(L"Playback stopped.");
 }
@@ -684,6 +694,78 @@ void PrevTrack()
         PlayTrack(prev);
     else
         ShowBalloon(APP_NAME, L"Already at the first track.", NIIF_INFO);
+}
+
+void EjectUSB()
+{
+    if (g_activeDriveLetter == 0)
+    {
+        ShowBalloon(APP_NAME, L"No USB drive to eject.", NIIF_WARNING);
+        return;
+    }
+
+    wchar_t driveLetter = g_activeDriveLetter;
+
+    // Stop playback first to release MCI file handles on the drive
+    StopPlayback();
+
+    // Open the drive volume as \\.\X:
+    wchar_t devicePath[8];
+    swprintf_s(devicePath, L"\\\\.\\%c:", driveLetter);
+
+    HANDLE hDrive = CreateFileW(devicePath,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr, OPEN_EXISTING, 0, nullptr);
+
+    if (hDrive == INVALID_HANDLE_VALUE)
+    {
+        // Retry with read-only access
+        hDrive = CreateFileW(devicePath,
+            GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            nullptr, OPEN_EXISTING, 0, nullptr);
+    }
+
+    if (hDrive == INVALID_HANDLE_VALUE)
+    {
+        wchar_t msg[64];
+        swprintf_s(msg, L"Failed to eject drive %c: — could not open device.", driveLetter);
+        ShowBalloon(APP_NAME, msg, NIIF_ERROR);
+        Log(msg);
+        return;
+    }
+
+    DWORD bytesReturned = 0;
+
+    // Lock the volume (best effort — not fatal if it fails)
+    DeviceIoControl(hDrive, FSCTL_LOCK_VOLUME,
+        nullptr, 0, nullptr, 0, &bytesReturned, nullptr);
+
+    // Dismount the volume
+    DeviceIoControl(hDrive, FSCTL_DISMOUNT_VOLUME,
+        nullptr, 0, nullptr, 0, &bytesReturned, nullptr);
+
+    // Eject the media
+    BOOL ejected = DeviceIoControl(hDrive, IOCTL_STORAGE_EJECT_MEDIA,
+        nullptr, 0, nullptr, 0, &bytesReturned, nullptr);
+
+    CloseHandle(hDrive);
+
+    if (ejected)
+    {
+        wchar_t msg[64];
+        swprintf_s(msg, L"Drive %c: safely ejected.", driveLetter);
+        ShowBalloon(APP_NAME, msg);
+        Log(msg);
+    }
+    else
+    {
+        wchar_t msg[64];
+        swprintf_s(msg, L"Failed to eject drive %c: — it may be in use.", driveLetter);
+        ShowBalloon(APP_NAME, msg, NIIF_ERROR);
+        Log(msg);
+    }
 }
 
 // ---------------------------------------------------------------------------
