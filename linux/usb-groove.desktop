@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=USB Groove
+Comment=Auto-plays MP3 files from USB drives
+Exec=USBGroove-Linux
+Icon=media-playback-start
+Terminal=false
+Categories=Audio;Music;Player;

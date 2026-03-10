@@ -141,8 +141,39 @@ jobs:
           name: macos-build
           path: USBGroove-macOS.zip
 
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libappindicator3-dev \
+            libnotify-dev \
+            libgstreamer1.0-dev \
+            libglib2.0-dev \
+            libgtk-3-dev
+
+      - name: Build
+        run: |
+          g++ -std=c++17 -O2 -Wall linux/USBGroove.cpp -o USBGroove-Linux \
+            $(pkg-config --cflags --libs appindicator3-0.1 glib-2.0 gio-2.0 gstreamer-1.0 libnotify) \
+            -lstdc++fs
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: USBGroove-Linux
+
   release:
-    needs: [build-windows, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -172,6 +203,7 @@ jobs:
             echo "|----------|------|---------|"
             echo "| **Windows** | \`USBGroove.exe\` | Just download and run |"
             echo "| **macOS** | \`USBGroove-macOS.zip\` | Unzip and move to Applications |"
+            echo "| **Linux** | \`USBGroove-Linux\` | Download, \`chmod +x\`, and run |"
             echo ""
             echo "## Package managers"
             echo "- **Windows:** \`winget install michaelnoergaard.USBGroove\`"
@@ -188,6 +220,11 @@ jobs:
         with:
           name: macos-build
 
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -197,6 +234,7 @@ jobs:
           files: |
             USBGroove.exe
             USBGroove-macOS.zip
+            USBGroove-Linux
           draft: false
           prerelease: false
 

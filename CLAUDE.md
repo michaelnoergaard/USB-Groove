@@ -20,8 +20,23 @@ windres USBAutoPlayer.rc -o USBAutoPlayer.res
 g++ -std=c++17 -O2 -Wall -DUNICODE -D_UNICODE -DWIN32_LEAN_AND_MEAN -o USBGroove.exe USBAutoPlayer.cpp USBAutoPlayer.res -lwinmm -lshell32 -luser32 -lgdi32 -ladvapi32 -mwindows
 ```
 
+### Linux
+```bash
+# Install dependencies (Ubuntu/Debian)
+sudo apt install libappindicator3-dev libnotify-dev libgstreamer1.0-dev libglib2.0-dev libgtk-3-dev
+
+# Install dependencies (Fedora)
+sudo dnf install libappindicator-gtk3-devel libnotify-devel gstreamer1-devel glib2-devel gtk3-devel
+
+# Build
+g++ -std=c++17 -O2 -Wall linux/USBGroove.cpp -o USBGroove-Linux \
+    $(pkg-config --cflags --libs appindicator3-0.1 glib-2.0 gio-2.0 gstreamer-1.0 libnotify) \
+    -lstdc++fs
+```
+
 ## Architecture
 
+### Windows
 Single-file C++ application with these major components:
 
 - **WinMain**: Entry point, creates hidden window, single-instance guard via mutex
@@ -31,12 +46,29 @@ Single-file C++ application with these major components:
 - **MP3 Scanner**: Recursive directory scan for `.mp3` files using Win32 `FindFirstFileW`
 - **MCI Playback Engine**: Uses `mciSendStringW` for open/play/pause/close operations
 
+### Linux
+Single-file C++ application (`linux/USBGroove.cpp`) mirroring Windows structure:
+
+- **main()**: flock single-instance guard, GTK/GStreamer/libnotify init, AppIndicator setup, GVolumeMonitor signals, `g_main_loop_run()`
+- **System tray**: libappindicator3 with GTK menu (play/pause, prev, next, stop, shuffle, repeat, playlist submenu, autorun, about, quit)
+- **USB detection**: GIO VolumeMonitor `mount-added`/`mount-removed` signals, filtered by `g_mount_can_unmount()`
+- **MP3 scanner**: `std::filesystem::recursive_directory_iterator` with case-insensitive `.mp3` filter
+- **Playback**: GStreamer `playbin` element with bus watch for EOS/ERROR
+- **Autorun**: XDG autostart desktop file (`~/.config/autostart/usb-groove.desktop`)
+- **Logging**: `/tmp/USBGroove.log` with timestamps
+
 ### Key Windows APIs Used
 - `winmm.dll` (MCI): Audio playback via `mciSendStringW`
 - `shell32.dll`: System tray via `Shell_NotifyIconW`
 - `dbt.h`: Device change notifications (`WM_DEVICECHANGE`, `DEV_BROADCAST_VOLUME`)
 
-### Message Flow
+### Key Linux Libraries Used
+- `GStreamer` (playbin): Audio playback via `gst_element_set_state()`
+- `libappindicator3`: System tray via `app_indicator_new()`
+- `GIO`: USB detection via `GVolumeMonitor` mount signals
+- `libnotify`: Desktop notifications via `notify_notification_new()`
+
+### Message Flow (Windows)
 1. USB drive inserted → `WM_DEVICECHANGE` with `DBT_DEVICEARRIVAL`
 2. 1.8s timer delay for filesystem mount
 3. `OnDriveInserted` scans for MP3s, creates playlist
