@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     private var repeatAll: Bool = false
     private var daSession: DASession?
     private var mountedUSBPaths: Set<String> = []
+    private var currentUSBPath: String?
 
     // MARK: - Lifecycle
 
@@ -93,6 +94,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         stop.target = self
         stop.isEnabled = currentTrack >= 0
         menu.addItem(stop)
+
+        let eject = NSMenuItem(title: "Eject USB", action: #selector(ejectUSB), keyEquivalent: "e")
+        eject.target = self
+        eject.isEnabled = currentUSBPath != nil
+        menu.addItem(eject)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -197,6 +203,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
 
     @objc private func stopAction() {
         stopPlayback()
+    }
+
+    @objc private func ejectUSB() {
+        guard let path = currentUSBPath else { return }
+        let volumeName = URL(fileURLWithPath: path).lastPathComponent
+        stopPlayback()
+        let success = NSWorkspace.shared.unmountAndEjectDevice(atPath: path)
+        if success {
+            mountedUSBPaths.remove(path)
+            showNotification(title: "USB Groove", body: "\(volumeName) safely ejected.")
+            log("Ejected USB drive: \(path)")
+        } else {
+            showNotification(title: "USB Groove", body: "Failed to eject \(volumeName).")
+            log("Failed to eject USB drive: \(path)")
+        }
     }
 
     @objc private func toggleShuffle() {
@@ -341,6 +362,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         showNotification(title: "USB Groove", body: msg)
         log(msg)
 
+        currentUSBPath = path
         startPlaylist(mp3s)
     }
 
@@ -413,6 +435,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         player = nil
         playlist.removeAll()
         currentTrack = -1
+        currentUSBPath = nil
         updateTooltip()
         updateMenu()
         log("Playback stopped.")
