@@ -48,6 +48,7 @@ static bool             g_isPaused     = false;
 static bool             g_shuffleOn    = false;
 static bool             g_repeatAll    = false;
 static std::string      g_currentMountPath;  // mount path of active USB
+static GMount*          g_activeMount  = nullptr;  // GMount of active USB drive
 static int              g_lockFd       = -1;
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,7 @@ static void Log(const std::string& msg);
 static bool IsAutorunEnabled();
 static void ToggleAutorun();
 static std::string GetExePath();
+static void EjectUSB();
 static bool AcquireLock();
 static void ReleaseLock();
 
@@ -323,6 +325,11 @@ static void OnMountAdded(GVolumeMonitor* /*monitor*/, GMount* mount, gpointer /*
     ShowNotification("USB Groove", msg.c_str());
     Log(msg);
 
+    // Store the active mount (ref it so it stays valid)
+    if (g_activeMount)
+        g_object_unref(g_activeMount);
+    g_activeMount = G_MOUNT(g_object_ref(mount));
+
     g_currentMountPath = mountPath;
     StartPlaylist(std::move(mp3s));
 }
@@ -348,6 +355,14 @@ static void OnMountRemoved(GVolumeMonitor* /*monitor*/, GMount* mount, gpointer 
     {
         StopPlayback();
         ShowNotification("USB Groove", "USB drive removed — playback stopped.");
+    }
+
+    // Clear active mount reference
+    if (g_activeMount)
+    {
+        g_object_unref(g_activeMount);
+        g_activeMount = nullptr;
+        BuildMenu();
     }
 }
 
@@ -427,6 +442,60 @@ static void OnPlayPause(GtkMenuItem* /*item*/, gpointer /*data*/)   { PauseResum
 static void OnNext(GtkMenuItem* /*item*/, gpointer /*data*/)        { NextTrack(); }
 static void OnPrev(GtkMenuItem* /*item*/, gpointer /*data*/)        { PrevTrack(); }
 static void OnStop(GtkMenuItem* /*item*/, gpointer /*data*/)        { StopPlayback(); }
+
+// ---------------------------------------------------------------------------
+// USB Eject
+// ---------------------------------------------------------------------------
+static void OnEjectFinished(GObject* source, GAsyncResult* result, gpointer /*data*/)
+{
+    GMount* mount = G_MOUNT(source);
+    GError* error = nullptr;
+
+    if (g_mount_eject_with_operation_finish(mount, result, &error))
+    {
+        ShowNotification("USB Groove", "USB drive safely ejected.");
+        Log("USB drive ejected successfully.");
+    }
+    else
+    {
+        std::string msg = "Failed to eject USB drive";
+        if (error)
+        {
+            msg += ": ";
+            msg += error->message;
+            g_error_free(error);
+        }
+        ShowNotification("USB Groove", msg.c_str());
+        Log(msg);
+    }
+
+    if (g_activeMount)
+    {
+        g_object_unref(g_activeMount);
+        g_activeMount = nullptr;
+    }
+    g_currentMountPath.clear();
+    BuildMenu();
+}
+
+static void EjectUSB()
+{
+    if (!g_activeMount) return;
+
+    StopPlayback();
+
+    g_mount_eject_with_operation(
+        g_activeMount,
+        G_MOUNT_UNMOUNT_NONE,
+        nullptr,       // no GMountOperation needed for USB
+        nullptr,       // no GCancellable
+        OnEjectFinished,
+        nullptr);
+
+    Log("Ejecting USB drive...");
+}
+
+static void OnEject(GtkMenuItem* /*item*/, gpointer /*data*/) { EjectUSB(); }
 
 static void OnShuffle(GtkCheckMenuItem* item, gpointer /*data*/)
 {
@@ -511,6 +580,12 @@ static void BuildMenu()
     g_signal_connect(stop, "activate", G_CALLBACK(OnStop), nullptr);
     gtk_widget_set_sensitive(stop, active);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), stop);
+
+    // Eject USB
+    GtkWidget* eject = gtk_menu_item_new_with_label("Eject USB");
+    g_signal_connect(eject, "activate", G_CALLBACK(OnEject), nullptr);
+    gtk_widget_set_sensitive(eject, g_activeMount != nullptr);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), eject);
 
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
 
@@ -692,6 +767,11 @@ int main(int argc, char* argv[])
 
     // Cleanup
     StopPlayback();
+    if (g_activeMount)
+    {
+        g_object_unref(g_activeMount);
+        g_activeMount = nullptr;
+    }
     notify_uninit();
     g_main_loop_unref(g_loop);
     g_object_unref(g_volMonitor);
