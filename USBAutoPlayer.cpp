@@ -1,5 +1,5 @@
 // =============================================================================
-// USBAutoPlayer.cpp  —  v2.0
+// USBAutoPlayer.cpp
 //
 // Automatically plays MP3 files from any inserted USB flash drive.
 // Uses Windows MCI (winmm.dll) for audio — no external player required.
