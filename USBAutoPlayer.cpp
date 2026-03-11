@@ -32,8 +32,18 @@
 #include <fstream>
 #include <random>
 
-#ifndef APP_VERSION
-#define APP_VERSION L"dev"
+// APP_VERSION is passed as a bare token (e.g. -DAPP_VERSION=1.48) to avoid
+// shell quoting issues across PowerShell/bash in CI.  These macros turn it
+// into a wide-string literal: 1.48 → "1.48" → L"1.48".
+#define _STRINGIFY(x) #x
+#define _TOSTR(x)     _STRINGIFY(x)
+#define _WIDEN(x)     L##x
+#define _TOWSTR(x)    _WIDEN(x)
+
+#ifdef APP_VERSION
+#define APP_VERSION_W _TOWSTR(_TOSTR(APP_VERSION))
+#else
+#define APP_VERSION_W L"dev"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -147,7 +157,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 
     AddTrayIcon(g_hWnd);
     RegisterForDeviceNotifications(g_hWnd);
-    Log(std::wstring(L"USB Groove v") + APP_VERSION + L" started. Waiting for USB drives...");
+    Log(std::wstring(L"USB Groove v") + APP_VERSION_W + L" started. Waiting for USB drives...");
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0))
@@ -295,7 +305,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case ID_TRAY_ABOUT:
         {
             std::wstring aboutText =
-                std::wstring(L"USB Groove v") + APP_VERSION + L"\n\n"
+                std::wstring(L"USB Groove v") + APP_VERSION_W + L"\n\n"
                 L"Plays MP3 files automatically from any USB drive.\n"
                 L"No media player required — built-in audio engine.\n\n"
                 L"  Double-click tray icon  =  track info\n"

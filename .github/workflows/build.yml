@@ -39,7 +39,7 @@ jobs:
           cl USBAutoPlayer.cpp `
             /O2 /W4 /EHsc /std:c++17 `
             /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN `
-            /DAPP_VERSION=L\"${{ steps.version.outputs.number }}\" `
+            /DAPP_VERSION=${{ steps.version.outputs.number }} `
             /link `
             USBAutoPlayer.res `
             winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib advapi32.lib `
