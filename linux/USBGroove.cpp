@@ -34,6 +34,10 @@
 
 namespace fs = std::filesystem;
 
+#ifndef APP_VERSION
+#define APP_VERSION "dev"
+#endif
+
 // ---------------------------------------------------------------------------
 // Globals
 // ---------------------------------------------------------------------------
@@ -522,12 +526,13 @@ static void OnPlaylistTrack(GtkMenuItem* /*item*/, gpointer data)
 
 static void OnAbout(GtkMenuItem* /*item*/, gpointer /*data*/)
 {
-    GtkWidget* dialog = gtk_message_dialog_new(
-        nullptr, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
-        "USB Groove — Linux\n\n"
+    std::string aboutText = std::string("USB Groove v") + APP_VERSION + " — Linux\n\n"
         "Plays MP3 files automatically from any USB drive.\n"
         "No media player required — built-in GStreamer audio engine.\n\n"
-        "Right-click tray icon for controls.");
+        "Right-click tray icon for controls.";
+    GtkWidget* dialog = gtk_message_dialog_new(
+        nullptr, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+        "%s", aboutText.c_str());
     gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
 }
@@ -739,7 +744,7 @@ int main(int argc, char* argv[])
     gst_init(&argc, &argv);
     notify_init("USB Groove");
 
-    Log("USB Groove (Linux) started. Waiting for USB drives...");
+    Log(std::string("USB Groove v") + APP_VERSION + " (Linux) started. Waiting for USB drives...");
 
     // System tray indicator
     g_indicator = app_indicator_new(
