@@ -39,6 +39,7 @@ jobs:
           cl USBAutoPlayer.cpp `
             /O2 /W4 /EHsc /std:c++17 `
             /DUNICODE /D_UNICODE /DWIN32_LEAN_AND_MEAN `
+            /DAPP_VERSION=L\"${{ steps.version.outputs.number }}\" `
             /link `
             USBAutoPlayer.res `
             winmm.lib shell32.lib user32.lib gdi32.lib kernel32.lib advapi32.lib `
@@ -63,6 +64,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version number
+        id: version
+        shell: bash
+        run: |
+          COUNT=$(git rev-list --count HEAD)
+          echo "number=1.$((COUNT - 1))" >> $GITHUB_OUTPUT
 
       - name: Build
         run: |
@@ -112,9 +122,9 @@ jobs:
               <key>CFBundleIdentifier</key>
               <string>com.michaelnoergaard.USBGroove</string>
               <key>CFBundleVersion</key>
-              <string>1.0</string>
+              <string>${{ steps.version.outputs.number }}</string>
               <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
+              <string>${{ steps.version.outputs.number }}</string>
               <key>CFBundleExecutable</key>
               <string>USBGroove</string>
               <key>CFBundleIconFile</key>
@@ -149,6 +159,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version number
+        id: version
+        shell: bash
+        run: |
+          COUNT=$(git rev-list --count HEAD)
+          echo "number=1.$((COUNT - 1))" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
         run: |
@@ -163,6 +182,7 @@ jobs:
       - name: Build
         run: |
           g++ -std=c++17 -O2 -Wall linux/USBGroove.cpp -o USBGroove-Linux \
+            -DAPP_VERSION='"${{ steps.version.outputs.number }}"' \
             $(pkg-config --cflags --libs appindicator3-0.1 glib-2.0 gio-2.0 gstreamer-1.0 libnotify) \
             -lstdc++fs
 

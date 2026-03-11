@@ -31,9 +31,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         setupStatusItem()
         setupDiskArbitration()
-        log("USB Groove started. Waiting for USB drives...")
+        log("USB Groove v\(version) started. Waiting for USB drives...")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -233,8 +234,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     }
 
     @objc private func showAbout() {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
         let alert = NSAlert()
-        alert.messageText = "USB Groove"
+        alert.messageText = "USB Groove v\(version)"
         alert.informativeText = """
             macOS Menu Bar App
 

@@ -1,5 +1,5 @@
 // =============================================================================
-// USBAutoPlayer.cpp  —  v2.0
+// USBAutoPlayer.cpp
 //
 // Automatically plays MP3 files from any inserted USB flash drive.
 // Uses Windows MCI (winmm.dll) for audio — no external player required.
@@ -32,10 +32,14 @@
 #include <fstream>
 #include <random>
 
+#ifndef APP_VERSION
+#define APP_VERSION L"dev"
+#endif
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-#define APP_NAME          L"USB AutoPlayer"
+#define APP_NAME          L"USB Groove"
 #define WM_TRAYICON       (WM_USER + 1)
 #define IDI_TRAY          1
 
@@ -143,7 +147,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 
     AddTrayIcon(g_hWnd);
     RegisterForDeviceNotifications(g_hWnd);
-    Log(L"USB AutoPlayer v2.0 started. Waiting for USB drives...");
+    Log(std::wstring(L"USB Groove v") + APP_VERSION + L" started. Waiting for USB drives...");
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0))
@@ -289,14 +293,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             }
             break;
         case ID_TRAY_ABOUT:
-            MessageBoxW(hWnd,
-                L"USB AutoPlayer v2.0\n\n"
+        {
+            std::wstring aboutText =
+                std::wstring(L"USB Groove v") + APP_VERSION + L"\n\n"
                 L"Plays MP3 files automatically from any USB drive.\n"
                 L"No media player required — built-in audio engine.\n\n"
                 L"  Double-click tray icon  =  track info\n"
-                L"  Right-click tray icon   =  controls",
-                APP_NAME, MB_ICONINFORMATION);
+                L"  Right-click tray icon   =  controls";
+            MessageBoxW(hWnd, aboutText.c_str(), APP_NAME, MB_ICONINFORMATION);
             break;
+        }
         case ID_TRAY_EXIT:
             StopPlayback();
             PostQuitMessage(0);
