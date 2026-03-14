@@ -3,52 +3,53 @@ name: Publish to WinGet
 # Triggers when a new GitHub Release is published, or manually
 on:
   release:
-      types: [published]
-        workflow_dispatch:
-            inputs:
-                  tag:
-                          description: 'Release tag (e.g. v1.53)'
-                                  required: true
-                                          default: 'v1.53'
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.53)'
+        required: true
+        default: 'v1.53'
 
-                                          jobs:
-                                            winget:
-                                                runs-on: windows-latest
-                                                    steps:
-                                                          - name: Submit package to WinGet
-                                                                  shell: pwsh
-                                                                          run: |
-                                                                                    # Download wingetcreate
-                                                                                              Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+jobs:
+  winget:
+    runs-on: windows-latest
+    steps:
+      - name: Submit package to WinGet
+        shell: pwsh
+        run: |
+          # Download wingetcreate
+          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
-                                                                                                        # Determine tag and version
-                                                                                                                  if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-                                                                                                                              $tag = '${{ github.event.inputs.tag }}'
-                                                                                                                                        } else {
-                                                                                                                                                    $tag = '${{ github.event.release.tag_name }}'
-                                                                                                                                                              }
-                                                                                                                                                                        $version = $tag -replace '^v', ''
-                                                                                                                                                                        
-                                                                                                                                                                                  # Fetch release assets from GitHub API
-                                                                                                                                                                                            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/michaelnoergaard/USB-Groove/releases/tags/$tag" `
-                                                                                                                                                                                                        -Headers @{ Authorization = "token ${{ secrets.WINGET_PAT }}"; 'User-Agent' = 'winget-workflow' }
-                                                                                                                                                                                                        
-                                                                                                                                                                                                                  # Find the Inno Setup installer
-                                                                                                                                                                                                                            $installerUrl = $release.assets |
-                                                                                                                                                                                                                                        Where-Object { $_.name -match 'USBGroove_Setup_v.*\.exe' } |
-                                                                                                                                                                                                                                                    Select-Object -ExpandProperty browser_download_url -First 1
-                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                              if (-not $installerUrl) {
-                                                                                                                                                                                                                                                                          Write-Error "USBGroove_Setup_v*.exe not found in release assets for tag $tag"
-                                                                                                                                                                                                                                                                                      exit 1
-                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                          Write-Host "Submitting version $version"
-                                                                                                                                                                                                                                                                                                                    Write-Host "Installer URL: $installerUrl"
-                                                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                              # Update the manifest and submit a PR to microsoft/winget-pkgs
-                                                                                                                                                                                                                                                                                                                                        .\wingetcreate.exe update michaelnoergaard.USBGroove `
-                                                                                                                                                                                                                                                                                                                                                    --version $version `
-                                                                                                                                                                                                                                                                                                                                                                --urls $installerUrl `
-                                                                                                                                                                                                                                                                                                                                                                            --submit `
-                                                                                                                                                                                                                                                                                                                                                                                        --token ${{ secrets.WINGET_PAT }}
+          # Determine tag and version
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $tag = '${{ github.event.inputs.tag }}'
+          } else {
+            $tag = '${{ github.event.release.tag_name }}'
+          }
+          $version = $tag -replace '^v', ''
+
+          # Fetch release assets from GitHub API
+          $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/michaelnoergaard/USB-Groove/releases/tags/$tag" `
+            -Headers @{ Authorization = "token ${{ secrets.WINGET_PAT }}"; 'User-Agent' = 'winget-workflow' }
+
+          # Find the Inno Setup installer
+          $installerUrl = $release.assets |
+            Where-Object { $_.name -match 'USBGroove_Setup_v.*\.exe' } |
+            Select-Object -ExpandProperty browser_download_url -First 1
+
+          if (-not $installerUrl) {
+            Write-Error "USBGroove_Setup_v*.exe not found in release assets for tag $tag"
+            exit 1
+          }
+
+          Write-Host "Submitting version $version"
+          Write-Host "Installer URL: $installerUrl"
+
+          # Update the manifest and submit a PR to microsoft/winget-pkgs
+          .\wingetcreate.exe update michaelnoergaard.USBGroove `
+            --version $version `
+            --urls $installerUrl `
+            --submit `
+            --token ${{ secrets.WINGET_PAT }}
