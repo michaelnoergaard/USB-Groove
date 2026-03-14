@@ -27,6 +27,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     private var daSession: DASession?
     var mountedUSBPaths: Set<String> = []
     private var currentUSBPath: String?
+    private var ejectingPath: String?
+    private var ejectingVolumeName: String?
 
     // MARK: - Lifecycle
 
@@ -208,7 +210,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
 
     @objc private func ejectUSB() {
         guard let path = currentUSBPath, let session = daSession else { return }
-        let volumeName = URL(fileURLWithPath: path).lastPathComponent
+
+        // Store eject info on instance so C callbacks can access via app delegate
+        ejectingPath = path
+        ejectingVolumeName = URL(fileURLWithPath: path).lastPathComponent
 
         // Stop playback first to release file handles
         stopPlayback()
@@ -219,37 +224,51 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
 
             let volumeURL = URL(fileURLWithPath: path) as CFURL
             guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, volumeURL) else {
-                self.showNotification(title: "USB Groove", body: "Failed to eject \(volumeName) — could not find disk.")
+                self.showNotification(title: "USB Groove", body: "Failed to eject \(self.ejectingVolumeName ?? "drive") — could not find disk.")
                 self.log("Failed to find DADisk for path: \(path)")
+                self.ejectingPath = nil
+                self.ejectingVolumeName = nil
                 return
             }
 
             // Unmount first, then eject in the callback
+            // Note: DA callbacks are C function pointers and cannot capture context.
+            // We access eject state via NSApplication.shared.delegate instead.
             DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionWhole), { disk, dissenter, context in
-                if let dissenter = dissenter {
-                    let status = DADissenterGetStatus(dissenter)
-                    DispatchQueue.main.async {
-                        let appDelegate = NSApplication.shared.delegate as? AppDelegate
-                        appDelegate?.showNotification(title: "USB Groove", body: "Failed to unmount \(volumeName).")
-                        appDelegate?.log("Failed to unmount \(path): status \(status)")
-                    }
-                    return
-                }
+                DispatchQueue.main.async {
+                    guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else { return }
+                    let volName = appDelegate.ejectingVolumeName ?? "drive"
+                    let volPath = appDelegate.ejectingPath ?? ""
 
-                // Unmount succeeded — now eject
-                DADiskEject(disk, DADiskEjectOptions(kDADiskEjectOptionDefault), { disk, dissenter, context in
-                    DispatchQueue.main.async {
-                        let appDelegate = NSApplication.shared.delegate as? AppDelegate
-                        if dissenter == nil {
-                            appDelegate?.mountedUSBPaths.remove(path)
-                            appDelegate?.showNotification(title: "USB Groove", body: "\(volumeName) safely ejected.")
-                            appDelegate?.log("Ejected USB drive: \(path)")
-                        } else {
-                            appDelegate?.showNotification(title: "USB Groove", body: "Failed to eject \(volumeName).")
-                            appDelegate?.log("Failed to eject USB drive: \(path)")
-                        }
+                    if let dissenter = dissenter {
+                        let status = DADissenterGetStatus(dissenter)
+                        appDelegate.showNotification(title: "USB Groove", body: "Failed to unmount \(volName).")
+                        appDelegate.log("Failed to unmount \(volPath): status \(status)")
+                        appDelegate.ejectingPath = nil
+                        appDelegate.ejectingVolumeName = nil
+                        return
                     }
-                }, nil)
+
+                    // Unmount succeeded — now eject
+                    DADiskEject(disk, DADiskEjectOptions(kDADiskEjectOptionDefault), { disk, dissenter, context in
+                        DispatchQueue.main.async {
+                            guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else { return }
+                            let volName = appDelegate.ejectingVolumeName ?? "drive"
+                            let volPath = appDelegate.ejectingPath ?? ""
+
+                            if dissenter == nil {
+                                appDelegate.mountedUSBPaths.remove(volPath)
+                                appDelegate.showNotification(title: "USB Groove", body: "\(volName) safely ejected.")
+                                appDelegate.log("Ejected USB drive: \(volPath)")
+                            } else {
+                                appDelegate.showNotification(title: "USB Groove", body: "Failed to eject \(volName).")
+                                appDelegate.log("Failed to eject USB drive: \(volPath)")
+                            }
+                            appDelegate.ejectingPath = nil
+                            appDelegate.ejectingVolumeName = nil
+                        }
+                    }, nil)
+                }
             }, nil)
         }
     }
