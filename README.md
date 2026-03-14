@@ -14,8 +14,11 @@ A lightweight cross-platform tray/menu bar application that automatically plays 
 - **Repeat All** - Loop the entire playlist continuously
 - **Full playback controls** - Play, pause, stop, next/previous track
 - **Eject USB** - Safely eject the active USB drive from the tray menu
+- **Playlist browser** - View and jump to any track via the playlist submenu
+- **Desktop notifications** - Now-playing notifications on all platforms
 - **Recursive scanning** - Finds MP3 files in all subdirectories
-- **Autorun at login** - Optional start-at-login on macOS and Linux
+- **Autorun at login** - Optional start-at-login on all platforms
+- **Single instance** - Only one copy runs at a time
 - **No dependencies** - Uses only built-in OS libraries
 - **Logging** - Debug log in `%TEMP%\USBAutoPlayer.log` (Windows), `~/Library/Logs/USBGroove.log` (macOS), or `/tmp/USBGroove.log` (Linux)
 
@@ -72,6 +75,8 @@ brew install usb-groove
 | **Shuffle** | Enable/disable shuffle mode |
 | **Repeat All** | Loop playlist when it reaches the end |
 | **Eject USB** | Safely eject the active USB drive |
+| **Playlist** | Browse and jump to any track |
+| **Start at login** | Toggle autorun at system startup |
 | **About** | View version information |
 
 ## Build from source
