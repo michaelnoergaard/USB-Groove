@@ -48,8 +48,9 @@ jobs:
           Write-Host "Installer URL: $installerUrl"
 
           # Update the manifest and submit a PR to microsoft/winget-pkgs
+          # Append |x64 to the URL to explicitly override architecture matching
           .\wingetcreate.exe update michaelnoergaard.USBGroove `
             --version $version `
-            --urls $installerUrl `
+            --urls "$installerUrl|x64" `
             --submit `
             --token ${{ secrets.WINGET_PAT }}
