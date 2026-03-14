@@ -277,5 +277,6 @@ jobs:
         with:
           identifier: michaelnoergaard.USBGroove
           version: ${{ needs.build-windows.outputs.version }}
-          installers-regex: '^USBGroove\.exe$'
+          release-tag: ${{ needs.build-windows.outputs.tag }}
+          installers-regex: 'USBGroove_Setup_v.*\.exe$'
           token: ${{ secrets.WINGET_PAT }}
