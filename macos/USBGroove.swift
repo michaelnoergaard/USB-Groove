@@ -25,7 +25,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     private var shuffleOn: Bool = false
     private var repeatAll: Bool = false
     private var daSession: DASession?
-    private var mountedUSBPaths: Set<String> = []
+    var mountedUSBPaths: Set<String> = []
     private var currentUSBPath: String?
 
     // MARK: - Lifecycle
@@ -163,7 +163,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         }
     }
 
-    private func showNotification(title: String, body: String) {
+    func showNotification(title: String, body: String) {
         let notification = NSUserNotification()
         notification.title = title
         notification.informativeText = body
@@ -207,17 +207,50 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
     }
 
     @objc private func ejectUSB() {
-        guard let path = currentUSBPath else { return }
+        guard let path = currentUSBPath, let session = daSession else { return }
         let volumeName = URL(fileURLWithPath: path).lastPathComponent
+
+        // Stop playback first to release file handles
         stopPlayback()
-        let success = NSWorkspace.shared.unmountAndEjectDevice(atPath: path)
-        if success {
-            mountedUSBPaths.remove(path)
-            showNotification(title: "USB Groove", body: "\(volumeName) safely ejected.")
-            log("Ejected USB drive: \(path)")
-        } else {
-            showNotification(title: "USB Groove", body: "Failed to eject \(volumeName).")
-            log("Failed to eject USB drive: \(path)")
+
+        // Small delay to ensure file handles are fully released
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+
+            let volumeURL = URL(fileURLWithPath: path) as CFURL
+            guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, volumeURL) else {
+                self.showNotification(title: "USB Groove", body: "Failed to eject \(volumeName) — could not find disk.")
+                self.log("Failed to find DADisk for path: \(path)")
+                return
+            }
+
+            // Unmount first, then eject in the callback
+            DADiskUnmount(disk, DADiskUnmountOptions(kDADiskUnmountOptionWhole), { disk, dissenter, context in
+                if let dissenter = dissenter {
+                    let status = DADissenterGetStatus(dissenter)
+                    DispatchQueue.main.async {
+                        let appDelegate = NSApplication.shared.delegate as? AppDelegate
+                        appDelegate?.showNotification(title: "USB Groove", body: "Failed to unmount \(volumeName).")
+                        appDelegate?.log("Failed to unmount \(path): status \(status)")
+                    }
+                    return
+                }
+
+                // Unmount succeeded — now eject
+                DADiskEject(disk, DADiskEjectOptions(kDADiskEjectOptionDefault), { disk, dissenter, context in
+                    DispatchQueue.main.async {
+                        let appDelegate = NSApplication.shared.delegate as? AppDelegate
+                        if dissenter == nil {
+                            appDelegate?.mountedUSBPaths.remove(path)
+                            appDelegate?.showNotification(title: "USB Groove", body: "\(volumeName) safely ejected.")
+                            appDelegate?.log("Ejected USB drive: \(path)")
+                        } else {
+                            appDelegate?.showNotification(title: "USB Groove", body: "Failed to eject \(volumeName).")
+                            appDelegate?.log("Failed to eject USB drive: \(path)")
+                        }
+                    }
+                }, nil)
+            }, nil)
         }
     }
 
@@ -266,6 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
             return
         }
         daSession = session
+        DASessionSetDispatchQueue(session, DispatchQueue.main)
 
         let mountCallback: DADiskMountApprovalCallback = { disk, context in
             return nil  // approve all mounts
@@ -475,7 +509,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         return name
     }
 
-    private func log(_ msg: String) {
+    func log(_ msg: String) {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let timestamp = formatter.string(from: Date())
