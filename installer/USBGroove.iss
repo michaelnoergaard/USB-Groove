@@ -16,10 +16,10 @@ AppSupportURL=https://github.com/michaelnoergaard/USB-Groove
 AppUpdatesURL=https://github.com/michaelnoergaard/USB-Groove
 DefaultDirName={autopf}\USBGroove
 DefaultGroupName=USBGroove
-LicenseFile=LICENSE
-OutputDir=.
+LicenseFile=..\LICENSE
+OutputDir=..
 OutputBaseFilename=USBGroove_Setup_v{#AppVersion}
-SetupIconFile=icons\app.ico
+SetupIconFile=..\icons\app.ico
 UninstallDisplayIcon={app}\USBGroove.exe
 Compression=lzma
 SolidCompression=yes
@@ -33,7 +33,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "USBGroove.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\USBGroove.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\USBGroove"; Filename: "{app}\USBGroove.exe"
