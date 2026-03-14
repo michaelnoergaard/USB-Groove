@@ -46,11 +46,19 @@ jobs:
             /SUBSYSTEM:WINDOWS `
             /OUT:USBGroove.exe
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        run: iscc /DAppVersion=${{ steps.version.outputs.number }} installer\USBGroove.iss
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: USBGroove.exe
+          path: |
+            USBGroove.exe
+            USBGroove_Setup_v*.exe
 
     outputs:
       tag: ${{ steps.version.outputs.tag }}
@@ -222,6 +230,7 @@ jobs:
             echo "| Platform | File | Install |"
             echo "|----------|------|---------|"
             echo "| **Windows** | \`USBGroove.exe\` | Just download and run |"
+            echo "| **Windows (Installer)** | \`USBGroove_Setup_v${TAG#v}.exe\` | Start Menu + Add/Remove Programs |"
             echo "| **macOS** | \`USBGroove-macOS.zip\` | Unzip and move to Applications |"
             echo "| **Linux** | \`USBGroove-Linux\` | Download, \`chmod +x\`, and run |"
             echo ""
@@ -253,6 +262,7 @@ jobs:
           body_path: /tmp/release-notes.md
           files: |
             USBGroove.exe
+            USBGroove_Setup_v*.exe
             USBGroove-macOS.zip
             USBGroove-Linux
           draft: false
@@ -267,5 +277,5 @@ jobs:
         with:
           identifier: michaelnoergaard.USBGroove
           version: ${{ needs.build-windows.outputs.version }}
-          installers-regex: 'USBGroove\.exe$'
+          installers-regex: '^USBGroove\.exe$'
           token: ${{ secrets.WINGET_PAT }}

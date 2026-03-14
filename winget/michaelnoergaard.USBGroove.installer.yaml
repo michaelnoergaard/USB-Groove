@@ -3,12 +3,19 @@
 PackageIdentifier: michaelnoergaard.USBGroove
 PackageVersion: "1.6"
 MinimumOSVersion: 10.0.17763.0
-InstallerType: portable
 Commands:
   - USBGroove
 Installers:
   - Architecture: x64
+    InstallerType: portable
     InstallerUrl: https://github.com/michaelnoergaard/USB-Groove/releases/download/v1.6/USBGroove.exe
     InstallerSha256: 39F554B1AF7107F1681F193FF895107A9FFCB44236CA910963EFDD62BE9241D5
+  - Architecture: x64
+    InstallerType: inno
+    InstallerUrl: https://github.com/michaelnoergaard/USB-Groove/releases/download/v1.6/USBGroove_Setup_v1.6.exe
+    InstallerSha256: PLACEHOLDER_HASH_WILL_BE_UPDATED_BY_WINGET_RELEASER
+    InstallerSwitches:
+      Silent: /VERYSILENT /SUPPRESSMSGBOXES
+      SilentWithProgress: /SILENT /SUPPRESSMSGBOXES
 ManifestType: installer
 ManifestVersion: 1.6.0
