@@ -34,23 +34,32 @@ jobs:
             -Uri "https://api.github.com/repos/michaelnoergaard/USB-Groove/releases/tags/$tag" `
             -Headers @{ Authorization = "token ${{ secrets.WINGET_PAT }}"; 'User-Agent' = 'winget-workflow' }
 
-          # Find the Inno Setup installer
-          $installerUrl = $release.assets |
+          # Find both installer URLs
+          $portableUrl = $release.assets |
+            Where-Object { $_.name -eq 'USBGroove.exe' } |
+            Select-Object -ExpandProperty browser_download_url -First 1
+
+          $setupUrl = $release.assets |
             Where-Object { $_.name -match 'USBGroove_Setup_v.*\.exe' } |
             Select-Object -ExpandProperty browser_download_url -First 1
 
-          if (-not $installerUrl) {
+          if (-not $portableUrl) {
+            Write-Error "USBGroove.exe not found in release assets for tag $tag"
+            exit 1
+          }
+          if (-not $setupUrl) {
             Write-Error "USBGroove_Setup_v*.exe not found in release assets for tag $tag"
             exit 1
           }
 
           Write-Host "Submitting version $version"
-          Write-Host "Installer URL: $installerUrl"
+          Write-Host "Portable URL: $portableUrl"
+          Write-Host "Installer URL: $setupUrl"
 
           # Update the manifest and submit a PR to microsoft/winget-pkgs
-          # Append |x64 to the URL to explicitly override architecture matching
+          # Portable URL matches the existing x64 entry, setup URL adds the Inno installer
           .\wingetcreate.exe update michaelnoergaard.USBGroove `
             --version $version `
-            --urls "$installerUrl|x64" `
+            --urls "$portableUrl|x64" "$setupUrl|x64" `
             --submit `
             --token ${{ secrets.WINGET_PAT }}
