@@ -320,11 +320,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, AVAudioPlayerDelegate {
         daSession = session
         DASessionSetDispatchQueue(session, DispatchQueue.main)
 
-        let mountCallback: DADiskMountApprovalCallback = { disk, context in
-            return nil  // approve all mounts
-        }
-        _ = mountCallback  // suppress unused warning
-
         // Watch for volume mounts via NSWorkspace
         let center = NSWorkspace.shared.notificationCenter
         center.addObserver(
