@@ -14,7 +14,7 @@
 //         gstreamer-1.0 libnotify) -lstdc++fs
 // =============================================================================
 
-#include <libappindicator/app-indicator.h>
+#include <libayatana-appindicator/app-indicator.h>
 #include <libnotify/notify.h>
 #include <gst/gst.h>
 #include <gio/gio.h>
@@ -596,20 +596,32 @@ static void BuildMenu()
 
     // Shuffle (checkbox)
     GtkWidget* shuffle = gtk_check_menu_item_new_with_label("Shuffle");
-    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(shuffle), g_shuffleOn);
     g_signal_connect(shuffle, "toggled", G_CALLBACK(OnShuffle), nullptr);
+    //Defensive fix: prevent shuffle state from resetting when BuildMenu is called multiple times
+    g_signal_handlers_block_by_func(shuffle, G_CALLBACK(OnShuffle), nullptr);
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(shuffle), g_shuffleOn);
+    g_signal_handlers_unblock_by_func(shuffle, G_CALLBACK(OnShuffle), nullptr);
+
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), shuffle);
 
     // Repeat All (checkbox)
     GtkWidget* repeat = gtk_check_menu_item_new_with_label("Repeat All");
-    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(repeat), g_repeatAll);
     g_signal_connect(repeat, "toggled", G_CALLBACK(OnRepeat), nullptr);
+    //Defensive fix: prevent repeat state from resetting when BuildMenu is called multiple times
+    g_signal_handlers_block_by_func(repeat, G_CALLBACK(OnRepeat), nullptr);
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(repeat), g_repeatAll);
+    g_signal_handlers_unblock_by_func(repeat, G_CALLBACK(OnRepeat), nullptr);
+
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), repeat);
 
     // Start on login (checkbox)
     GtkWidget* autorun = gtk_check_menu_item_new_with_label("Start on Login");
-    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(autorun), IsAutorunEnabled());
     g_signal_connect(autorun, "toggled", G_CALLBACK(OnAutorun), nullptr);
+    //Defensive fix: prevent autorun state from resetting when BuildMenu is called multiple times
+    g_signal_handlers_block_by_func(autorun, G_CALLBACK(OnAutorun), nullptr);
+    gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(autorun), IsAutorunEnabled());
+    g_signal_handlers_unblock_by_func(autorun, G_CALLBACK(OnAutorun), nullptr);
+    
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), autorun);
 
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
