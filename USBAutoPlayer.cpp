@@ -503,6 +503,7 @@ void ShowContextMenu(HWND hWnd)
     SetForegroundWindow(hWnd);
     TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN,
         pt.x, pt.y, 0, hWnd, nullptr);
+    PostMessage(hWnd, WM_NULL, 0, 0);  // dismiss tray menu on click-away (KB Q135788)
     DestroyMenu(hMenu);
 }
 
