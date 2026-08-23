@@ -16,5 +16,5 @@
 
 ## Checklist
 - [ ] Code compiles cleanly
-- [ ] Tested on Windows
+- [ ] Tested on Windows, macOS, and Linux
 - [ ] Updated documentation if needed

@@ -23,7 +23,7 @@ A clear and concise description of what actually happened.
 
 ## Environment
 Please complete the following information:
-- [ ] Windows Version: (e.g., Windows 10 21H2, Windows 11)
+- [ ] Windows, macOS, and Linux Version: (e.g., Windows 10 21H2, Windows 11)
 - [ ] USBGroove Version: (e.g., 1.0.0)
 - [ ] Device/Controller: (e.g., specific USB device if relevant)
 
